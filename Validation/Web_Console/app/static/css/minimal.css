@@ -1,0 +1,22 @@
+/* Minimal operator skin. Flat, compact and offline. */
+:root{--bg-primary:#0b0f14;--bg-secondary:#11161d;--bg-card:#151b23;--border-color:#28313c;--text-primary:#e7edf3;--text-secondary:#a8b3bf;--text-muted:#718091;--accent-cyan:#5aa9d6;--accent-emerald:#58b989;--accent-amber:#d5a34c;--accent-rose:#d66a78}
+body{background:var(--bg-primary);font-size:13px}.radar-logo{display:none!important}.sidebar{width:220px;background:#0e1319;border-right:1px solid var(--border-color)}
+.sidebar-header{padding:16px;border-bottom:1px solid var(--border-color)}.sidebar-header h2{font-size:16px}.sidebar-header span{color:var(--text-muted)}
+.nav-section-title{padding:8px 10px 4px;color:var(--text-muted)}.nav-item{padding:8px 10px;border-radius:4px;margin-bottom:2px}.nav-item.active{background:#161e27;color:var(--text-primary);border-left:2px solid var(--accent-cyan)}
+.content-body{padding:18px 20px}.topbar{padding:11px 20px;background:#0e1319;border-bottom:1px solid var(--border-color)}.topbar-title{font-size:15px}
+.panel,.kpi-card,.module-card,.router-header-panel{box-shadow:none!important;border-radius:4px}.panel{margin-bottom:14px;background:var(--bg-secondary);border:1px solid var(--border-color)}
+.panel-header{padding:9px 12px;background:#131920;border-bottom:1px solid var(--border-color)}.panel-body{padding:12px}.panel-title{font-size:12px}
+.kpi-grid{gap:9px;margin-bottom:14px}.kpi-card{padding:11px 12px;background:var(--bg-secondary);border:1px solid var(--border-color)}.kpi-card::after{display:none}.kpi-title{font-size:10px;margin-bottom:5px}.kpi-value{font-size:20px}.kpi-subtext{font-size:10px}
+.module-grid{gap:10px;margin-bottom:14px}.module-card{padding:12px;background:var(--bg-card)}.module-card:hover,.btn:hover,.refresh-btn:hover{transform:none!important;box-shadow:none!important}
+.data-table{font-size:12px}.data-table th{padding:7px 8px;font-size:10px;background:#0f141a}.data-table td{padding:8px}.btn{padding:6px 10px;border-radius:4px;font-size:11px;box-shadow:none!important}
+.btn-primary{background:#3f7fa6}.btn-secondary{background:#171e26;border-color:#303b47}.btn-danger{background:#462a31;border-color:#70404a}.btn-success{background:#234739;border-color:#356d59}
+.refresh-btn{padding:6px 10px;border-radius:4px}.status-pill{padding:3px 8px;border-radius:9px;font-size:9px}.status-pill::before{width:5px;height:5px;box-shadow:none!important}
+.modal-backdrop{background:rgba(3,6,10,.78);backdrop-filter:none}.modal-backdrop.active,.modal-backdrop.open{display:flex!important}.modal-container{border-radius:5px;box-shadow:0 12px 35px rgba(0,0,0,.45);border:1px solid var(--border-color)}
+.modal-header,.modal-footer{padding:11px 14px;background:#131920}.modal-body{padding:14px;gap:11px}.modal-title{font-size:14px}.form-input,.form-select{padding:7px 9px;border-radius:4px;background:#0e1319;border-color:#303b47}
+.form-input:focus,.form-select:focus{box-shadow:none;border-color:#4e7793}.form-section-title{color:#79a9c5;border-bottom:1px solid #26333f}.segmented-toggle{border-radius:4px}.segmented-toggle-btn{padding:7px}.segmented-toggle-btn.active{background:#3f7fa6;box-shadow:none}
+.sources-table{min-width:900px}.toast{box-shadow:0 6px 20px rgba(0,0,0,.35)}
+#view-router .router-status-row,#view-router #btn-start-router{display:none!important}
+.fw-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:2px 0 10px;border-bottom:1px solid var(--border-color)}.fw-title{font-size:16px;font-weight:600}.fw-subtitle{font-size:11px;color:var(--text-muted);margin-top:3px}
+.fw-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin-bottom:14px}.fw-summary>div{background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:4px;padding:10px 12px}.fw-summary span{display:block;font-size:10px;color:var(--text-muted);margin-bottom:4px}.fw-summary strong{font-size:19px;font-weight:600}
+.pans-config-row{display:flex;gap:10px;align-items:flex-end}.pans-config-field{flex:1;min-width:0}.pans-folder-line{display:flex;gap:8px}.pans-folder-line .form-input{flex:1}
+@media(max-width:760px){.fw-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.pans-config-row{flex-direction:column;align-items:stretch}}

@@ -1,0 +1,29 @@
+# Validation Web Console Configuration
+server:
+  host: "127.0.0.1"
+  port: 8088
+
+router:
+  api_url: "http://127.0.0.1:8080"
+  config_path: "Validation/Data_Router/config/sources.yaml"
+  log_path: "Validation/Data_Router/logs/router.log"
+  state_db_path: "Validation/Data_Router/state/router_state.db"
+
+parser:
+  api_url: "http://127.0.0.1:8081"
+  enabled: false # Will become true once parser daemon is active
+
+forwarder:
+  api_url: "http://127.0.0.1:8082"
+  enabled: true
+
+service_control:
+  mode: "auto" # "auto", "windows", or "systemd"
+  router_service_name: "validation-router.service"
+  parser_service_name: "validation-parser.service"
+  forwarder_service_name: "validation-forwarder.service"
+  web_service_name: "validation-web.service"
+
+monitoring:
+  poll_interval_seconds: 3.0
+  activity_log_lines: 50

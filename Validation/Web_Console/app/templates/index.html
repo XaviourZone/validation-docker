@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Validation</title>
+  <link rel="stylesheet" href="/static/css/console.css">
+  <link rel="stylesheet" href="/static/css/minimal.css?v=20260918-r2">
+</head>
+<body>
+<aside class="sidebar">
+  <div class="sidebar-header"><div><h2>Validation</h2><span>Maritime Pipeline</span></div></div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-title">Core</div>
+    <a class="nav-item active" data-tab="dashboard"><span>Dashboard</span></a>
+    <a class="nav-item" data-tab="router"><span>1. Data Router</span><span class="mini-badge running" id="sidebar-router-badge">Sources</span></a>
+    <a class="nav-item" data-tab="parser"><span>2. Data Parser</span><span class="mini-badge running" id="sidebar-parser-badge">Live</span></a>
+    <a class="nav-item" data-tab="forwarder"><span>3. Data Forwarder</span><span class="mini-badge running" id="sidebar-forwarder-badge">Live</span></a>
+    <a class="nav-item" data-tab="database"><span>4. Database</span></a>
+    <div class="nav-section-title">Operations</div>
+    <a class="nav-item" data-tab="system"><span>System</span></a>
+    <a class="nav-item" data-tab="logs"><span>Logs</span></a>
+  </nav>
+  <div class="sidebar-footer"><span>Console v1.0</span><span>Offline</span></div>
+</aside>
+
+<div class="content-wrapper">
+  <header class="topbar">
+    <div class="topbar-left"><h1 class="topbar-title" id="topbar-title">Validation Pipeline</h1><span id="system-health-badge" class="status-pill degraded">CONNECTING</span></div>
+    <div class="topbar-right"><div class="utc-clock" id="utc-clock">UTC</div><button class="refresh-btn" id="btn-manual-refresh">Refresh</button></div>
+  </header>
+
+  <main class="content-body">
+    <div class="view-tab active" id="view-dashboard">
+      <div class="panel"><div class="panel-header"><span class="panel-title">Pipeline</span></div><div class="panel-body"><div class="module-grid" id="module-cards-container"></div></div></div>
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-title">Throughput</div><div class="kpi-value" id="router-throughput">0.0 <span class="unit">msg/s</span></div></div>
+        <div class="kpi-card"><div class="kpi-title">Queue</div><div class="kpi-value" id="router-queue-depth">0 <span class="unit">/ 10000</span></div></div>
+        <div class="kpi-card"><div class="kpi-title">Acknowledged</div><div class="kpi-value" id="router-ack-count">0</div></div>
+        <div class="kpi-card"><div class="kpi-title">Errors</div><div class="kpi-value" id="router-fail-count">0</div></div>
+      </div>
+      <div class="panel"><div class="panel-header"><span class="panel-title">Recent Activity</span></div><div class="panel-body"><div class="activity-feed" id="activity-list"></div></div></div>
+      <div class="panel"><div class="panel-header"><span class="panel-title">Alerts</span></div><div class="panel-body"><div class="activity-feed" id="error-list"></div></div></div>
+    </div>
+
+    <div class="view-tab" id="view-router">
+      <div class="router-header-panel"><div class="router-header-title-row"><h2>Data Router</h2></div><div class="router-status-row"><span id="router-page-status-pill" class="status-pill stopped">STOPPED</span><button id="btn-start-router" class="btn btn-success" style="display:none">Start</button></div></div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Sources</span><button class="btn btn-primary" id="btn-add-source">+ Add Source</button></div>
+        <div class="sources-table-scroll-wrap"><table class="data-table sources-table" id="sources-data-table">
+          <colgroup><col class="col-src-name"><col class="col-src-enabled"><col class="col-src-type"><col class="col-src-input"><col class="col-src-parser"><col class="col-src-dest"><col class="col-src-status"><col class="col-src-activity"><col class="col-src-error"><col class="col-src-actions"></colgroup>
+          <thead><tr><th>Source</th><th>Enabled</th><th>Type</th><th>Input</th><th>Parser</th><th>Destination</th><th>Status</th><th>Last Activity</th><th>Error</th><th>Actions</th></tr></thead>
+          <tbody id="sources-table-body"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="view-tab" id="view-parser">
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-title">Service</div><div class="kpi-value"><span class="status-pill stopped" id="parser-service-badge">STOPPED</span></div><div class="kpi-subtext" id="parser-service-uptime">0s</div></div>
+        <div class="kpi-card"><div class="kpi-title">Messages</div><div class="kpi-value" id="parser-messages-received">0</div></div>
+        <div class="kpi-card"><div class="kpi-title">Records</div><div class="kpi-value" id="parser-records-produced">0</div></div>
+        <div class="kpi-card"><div class="kpi-title">Errors</div><div class="kpi-value" id="parser-rejected-count">0</div></div>
+      </div>
+      <div class="panel"><div class="panel-header"><span class="panel-title">Parser Feeds</span></div><div class="panel-body" style="padding:0"><table class="data-table"><thead><tr><th>Feed</th><th>Engine</th><th>Envelopes</th><th>Records</th><th>Status</th></tr></thead><tbody id="parser-sources-body">
+        <tr><td>SAIS_IOR</td><td>SAIS</td><td id="p-sais-ior-env">0</td><td id="p-sais-ior-rec">0</td><td>READY</td></tr>
+        <tr><td>SAIS_GLOBAL</td><td>SAIS</td><td id="p-sais-global-env">0</td><td id="p-sais-global-rec">0</td><td>READY</td></tr>
+        <tr><td>MSIS</td><td>MSIS</td><td id="p-msis-env">0</td><td id="p-msis-rec">0</td><td>READY</td></tr>
+        <tr><td>LRIT</td><td>LRIT</td><td id="p-lrit-env">0</td><td id="p-lrit-rec">0</td><td>READY</td></tr>
+        <tr><td>VATMS_EAST</td><td>VATMS</td><td id="p-vatms-east-env">0</td><td id="p-vatms-east-rec">0</td><td>READY</td></tr>
+        <tr><td>VATMS_WEST</td><td>VATMS</td><td id="p-vatms-west-env">0</td><td id="p-vatms-west-rec">0</td><td>READY</td></tr>
+        <tr><td>NAIS</td><td>NAIS</td><td id="p-nais-env">0</td><td id="p-nais-rec">0</td><td>READY</td></tr>
+      </tbody></table></div></div>
+    </div>
+
+    <div class="view-tab" id="view-forwarder"></div>
+
+    <div class="view-tab" id="view-database">
+      <div class="operator-toolbar">
+        <div class="control-group-card"><div class="control-group-title">WRS</div><div>Status: <span id="db-wrs-status" class="status-pill stopped">UNKNOWN</span></div><div>File: <strong id="db-wrs-file">wrs.db</strong></div><div>Size: <strong id="db-wrs-size">0 MB</strong></div><div>Tables: <strong id="db-wrs-tables">0</strong></div><div>Records: <strong id="db-wrs-records">0</strong></div><div>Last Import: <strong id="db-wrs-last">Unknown</strong></div><div class="control-btn-strip"><button class="btn btn-primary" id="btn-wrs-refresh">Refresh</button><button class="btn btn-danger" id="btn-wrs-clear">Clear</button></div></div>
+        <div class="control-group-card"><div class="control-group-title">PANS</div><div>Status: <span id="db-pans-status" class="status-pill stopped">UNKNOWN</span></div><div>Importer: <span id="db-pans-importer-status" class="status-pill stopped">UNKNOWN</span></div><div>Size: <strong id="db-pans-size">0 MB</strong></div><div>Tables: <strong id="db-pans-tables">0</strong></div><div>Records: <strong id="db-pans-records">0</strong></div><div>Files: <strong id="db-pans-files">0</strong></div><div>Last Update: <strong id="db-pans-last">Unknown</strong></div><div class="control-btn-strip"><button class="btn btn-success" id="btn-pans-start">Start</button><button class="btn btn-danger" id="btn-pans-stop">Stop</button><button class="btn btn-secondary" id="btn-pans-process">Process</button><button class="btn btn-danger" id="btn-pans-clear">Clear</button></div></div>
+        <div class="control-group-card"><div class="control-group-title">NSC</div><div>Status: <span id="db-nsc-status" class="status-pill stopped">UNKNOWN</span></div><div>File: <strong id="db-nsc-file">nsc.db</strong></div><div>Size: <strong id="db-nsc-size">0 MB</strong></div><div>Tables: <strong id="db-nsc-tables">0</strong></div><div>Records: <strong id="db-nsc-records">0</strong></div><div>East: <strong id="db-nsc-east">0</strong></div><div>West: <strong id="db-nsc-west">0</strong></div><div>Last Import: <strong id="db-nsc-last">Unknown</strong></div><div class="control-btn-strip"><button class="btn btn-primary" id="btn-nsc-refresh">Refresh</button><button class="btn btn-danger" id="btn-nsc-clear">Clear</button></div></div>
+      </div>
+      <div class="panel"><div class="panel-header"><span class="panel-title">Tables</span></div><div class="panel-body" style="padding:0"><table class="data-table"><thead><tr><th>Database</th><th>Table</th><th>Rows</th></tr></thead><tbody id="db-tables-body"></tbody></table></div></div>
+    </div>
+
+    <div class="view-tab" id="view-system"><div class="panel"><div class="panel-header"><span class="panel-title">System</span></div><div class="panel-body" id="system-diagnostics"></div></div></div>
+    <div class="view-tab" id="view-logs"><div class="panel"><div class="panel-header"><span class="panel-title">Logs</span></div><div class="panel-body"><div id="full-log-viewer"></div></div></div></div>
+  </main>
+</div>
+
+<div class="modal-backdrop" id="modal-source-config">
+  <div class="modal-container">
+    <div class="modal-header"><div class="modal-title"><span id="modal-title-icon"></span><span id="modal-title-text">Configure Data Source</span></div><button type="button" class="modal-close-btn" id="btn-modal-close">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row"><div class="form-group"><label class="form-label">Source Name *</label><input id="src-name" class="form-input"></div><div class="form-group"><label class="form-label">Description</label><input id="src-desc" class="form-input"></div></div>
+      <div class="form-group"><label><input type="checkbox" id="src-enabled" checked> Enabled</label></div>
+      <div class="form-section-title">Feed Type</div><div class="segmented-toggle"><button type="button" class="segmented-toggle-btn active" id="btn-type-file">FILE</button><button type="button" class="segmented-toggle-btn" id="btn-type-tcp">TCP</button></div>
+      <input type="hidden" id="src-is-new" value="true"><input type="hidden" id="src-type" value="file">
+      <div id="container-fields-file"><div class="form-row"><div class="form-group"><label class="form-label">Input Folder *</label><input id="src-folder" class="form-input"></div><div class="form-group"><label class="form-label">File Pattern *</label><input id="src-patterns" class="form-input" value="*.csv"></div></div></div>
+      <input type="hidden" id="src-stability" value="1"><input type="hidden" id="src-poll" value="1">
+      <div id="container-fields-tcp" style="display:none"><div class="form-row"><div class="form-group"><label class="form-label">Host *</label><input id="src-remote-host" class="form-input"></div><div class="form-group"><label class="form-label">Port *</label><input id="src-remote-port" class="form-input" type="number"></div></div></div>
+      <input type="hidden" id="src-framing" value="line"><input type="hidden" id="src-max-line" value="65536"><input type="hidden" id="src-recon-init" value="2"><input type="hidden" id="src-recon-max" value="60">
+      <div class="form-group"><label class="form-label">Parser</label><select id="src-parser" class="form-select"></select></div>
+      <input type="text" id="src-derived-destination" class="form-input" style="display:none">
+      <pre id="src-preview-text" style="font-size:11px;margin:0"></pre><span id="preview-badge" style="display:none"></span>
+      <div id="modal-feedback-alert" style="display:none"></div><div class="pending-spec-banner" style="display:none"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" id="btn-modal-cancel">Cancel</button><button class="btn btn-secondary" id="btn-modal-validate">Validate</button><button class="btn btn-primary" id="btn-modal-save">Save</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-confirmation">
+  <div class="modal-container" style="max-width:440px"><div class="modal-header"><div class="modal-title"><span id="confirm-title">Confirm</span></div><button class="modal-close-btn" id="btn-confirm-close">✕</button></div><div class="modal-body"><div id="confirm-message"></div><div id="confirm-subtext"></div></div><div class="modal-footer"><button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button><button class="btn btn-danger" id="btn-confirm-proceed">Confirm</button></div></div>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+<script src="/static/js/console.js?v=20260918-r2"></script>
+<script src="/static/js/console_ui_loader.js?v=20260918-r2"></script>
+</body>
+</html>

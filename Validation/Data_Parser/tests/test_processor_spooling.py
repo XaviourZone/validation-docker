@@ -74,6 +74,8 @@ class TestProcessorSpooling(unittest.TestCase):
             self.assertEqual(result.records_parsed, 2)
             self.assertEqual(len(list(Path(tmp).glob("*.xml"))), 2)
             self.assertEqual(diagnostic.count("<ns2:XTrack verbose="), 2)
+            self.assertIn("<id>timestamp.receipt</id>", diagnostic)
+            self.assertIn("<tv>1758199200000</tv>", diagnostic)
 
 
 if __name__ == "__main__":

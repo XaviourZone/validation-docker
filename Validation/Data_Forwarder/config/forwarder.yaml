@@ -1,0 +1,37 @@
+# Validation Data Forwarder configuration
+# Destination credentials are stored locally outside this YAML file.
+
+server:
+  http_host: "127.0.0.1"
+  http_port: 8082
+
+spool:
+  input_dir: "Validation/Data_Forwarder/spool/pending"
+  archive_dir: "Validation/Data_Forwarder/spool/delivered"
+  failed_dir: "Validation/Data_Forwarder/spool/failed"
+  state_db: "Validation/Data_Forwarder/state/forwarder.db"
+  secret_file: "Validation/Data_Forwarder/state/forwarder_secrets.json"
+  poll_interval_seconds: 1
+  claim_timeout_seconds: 300
+
+retry:
+  max_attempts: 5
+  initial_delay_seconds: 2
+  max_delay_seconds: 60
+  multiplier: 2.0
+
+# Current operational downstream. Credentials remain local in the secret store.
+destinations:
+  D-DIODE-01:
+    enabled: true
+    protocol: "sftp"
+    host: "40.1.1.1"
+    port: 22
+    remote_path: "/home/ddiode/txserver/in/"
+    username: "ddiode"
+    private_key_file: ""
+    connect_timeout_seconds: 10
+    verify_remote_size: true
+
+logging:
+  level: "INFO"

@@ -1,0 +1,12 @@
+# Position validation thresholds. These are configurable operating limits,
+# not universal physical limits for every vessel.
+positional_spoofing:
+  enabled: true
+  max_speed_knots:
+    default: 50
+    commercial: 40
+    cargo: 40
+    tanker: 40
+    passenger: 45
+    fishing: 45
+    high_speed: 70

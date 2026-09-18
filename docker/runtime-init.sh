@@ -12,6 +12,8 @@ mkdir -p \
   runtime/router-state \
   runtime/router-logs \
   runtime/parser-logs \
+  runtime/parser-state \
+  runtime/forwarder-state \
   runtime/reference
 
 printf '%s\n' "Runtime directories initialized."

@@ -1,0 +1,17 @@
+server:
+  host: "0.0.0.0"
+  port: 8088
+router:
+  api_url: "http://router:8080"
+  config_path: "Validation/Data_Router/config/sources.yaml"
+  log_path: "Validation/Data_Router/logs/router.log"
+  state_db_path: "Validation/Data_Router/state/router_state.db"
+parser:
+  api_url: "http://parser:8081"
+forwarder:
+  api_url: "http://forwarder:8082"
+service_control:
+  mode: "none"
+  router_service_name: "validation-router.service"
+  parser_service_name: "validation-parser.service"
+  forwarder_service_name: "validation-forwarder.service"

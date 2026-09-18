@@ -32,7 +32,7 @@ class TestXMLContract(unittest.TestCase):
         xml = XTrackXMLGenerator().generate_document(norm)
         count = XTrackXMLGenerator.validate_document(xml)
         self.assertGreaterEqual(count, 1)
-        self.assertEqual(xml.count("<ns2:XTrack"), 1)
+        self.assertEqual(xml.count("<ns2:XTrack verbose="), 1)
         self.assertEqual(xml.count("<ns2:A>"), count)
 
 

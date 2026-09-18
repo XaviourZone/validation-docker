@@ -1,0 +1,65 @@
+services:
+  parser:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: validation/parser:dev
+    restart: unless-stopped
+    command: ["python", "-m", "Validation.Data_Parser.app.main", "--config", "/opt/validation/docker/parser.yaml"]
+    volumes:
+      - ./runtime/data_inflow:/opt/validation/DATA_INFLOW
+      - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
+      - ./runtime/parser-logs:/opt/validation/Validation/Data_Parser/logs
+      - ./runtime/reference:/opt/validation/Validation/Database
+    ports:
+      - "10001:10001"
+      - "10002:10002"
+      - "10003:10003"
+      - "10004:10004"
+      - "10005:10005"
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health', timeout=2)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  router:
+    image: validation/parser:dev
+    restart: unless-stopped
+    command: ["python", "-m", "Validation.Data_Router.app.main", "--config", "/opt/validation/docker/sources.yaml"]
+    depends_on:
+      parser:
+        condition: service_healthy
+    volumes:
+      - ./runtime/data_inflow:/opt/validation/DATA_INFLOW
+      - ./runtime/router-state:/opt/validation/Validation/Data_Router/state
+      - ./runtime/router-logs:/opt/validation/Validation/Data_Router/logs
+    ports:
+      - "8080:8080"
+
+  forwarder:
+    image: validation/parser:dev
+    restart: unless-stopped
+    command: ["python", "-m", "Validation.Data_Forwarder.app.main", "--config", "/opt/validation/docker/forwarder.yaml"]
+    volumes:
+      - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
+    ports:
+      - "8082:8082"
+
+  web:
+    image: validation/parser:dev
+    restart: unless-stopped
+    command: ["python", "-m", "Validation.Web_Console.app.main", "--config", "/opt/validation/docker/console.yaml"]
+    depends_on:
+      - router
+      - parser
+      - forwarder
+    volumes:
+      - ./runtime/data_inflow:/opt/validation/DATA_INFLOW
+      - ./runtime/router-state:/opt/validation/Validation/Data_Router/state
+      - ./runtime/router-logs:/opt/validation/Validation/Data_Router/logs
+      - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
+      - ./runtime/reference:/opt/validation/Validation/Database
+    ports:
+      - "8088:8088"

@@ -74,11 +74,13 @@ class XTrackXMLGenerator:
         return saxutils.escape(sanitize_string(str(value)))
 
     def generate_document(self, record: NormalizedRecord) -> str:
+        """Generate one XML document using the exact downstream wrapper shape."""
         logical = record.to_logical_dict()
-        root = ET.Element(f"{{{NS_XTRACK}}}XTracks")
-        root.set("xmlns", NS_COMMON)
-        root.set("xmlns:ns2", NS_XTRACK)
-        xtrack = ET.SubElement(root, f"{{{NS_XTRACK}}}XTrack", {"verbose": "true"})
+        lines = [
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+            f'<ns2:XTracks xmlns="{NS_COMMON}" xmlns:ns2="{NS_XTRACK}">',
+            '    <ns2:XTrack verbose="true">',
+        ]
 
         for field_id in CANONICAL_ORDER:
             val_tag, unit = FIELD_SPECS[field_id]
@@ -86,16 +88,16 @@ class XTrackXMLGenerator:
             text = self._format_value(val_tag, value)
             if text is None:
                 continue
-            a = ET.SubElement(xtrack, f"{{{NS_XTRACK}}}A")
-            id_elem = ET.SubElement(a, "id")
-            id_elem.text = field_id
-            v = ET.SubElement(a, val_tag)
-            if unit:
-                v.set("u", unit)
-            v.text = text
+            unit_attr = f' u="{unit}"' if unit else ''
+            lines.extend([
+                '        <ns2:A>',
+                f'            <id>{field_id}</id>',
+                f'            <{val_tag}{unit_attr}>{text}</{val_tag}>',
+                '        </ns2:A>',
+            ])
 
-        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + ET.tostring(root, encoding="unicode")
-
+        lines.extend(['    </ns2:XTrack>', '</ns2:XTracks>'])
+        return "\n".join(lines)
     def generate_single_xml(self, record: NormalizedRecord) -> str:
         return self.generate_document(record)
 

@@ -4,11 +4,11 @@ from pathlib import Path
 
 from Validation.Data_Parser.app.models.common import ParserEnvelope, CommonVesselRecord
 from Validation.Data_Parser.app.pipeline.normalizer import normalize_from_common_record
-from Validation.Data_Parser.app.pipeline.xml_generator import XTrackXMLGenerator
+from Validation.Data_Parser.app.pipeline.xml_generator import FIELD_SPECS, XTrackXMLGenerator\nfrom Validation.Data_Parser.app.pipeline.normalizer import LOGICAL_FIELDS_41
 
 
 class TestXMLContract(unittest.TestCase):
-    def test_one_record_one_xtrack_and_41_tag_membership(self):
+    def test_41_field_spec_is_complete(self):\n        self.assertEqual(len(LOGICAL_FIELDS_41), 41)\n        self.assertEqual(set(LOGICAL_FIELDS_41), set(FIELD_SPECS))\n\n    def test_one_record_one_xtrack_and_41_tag_membership(self):
         rec = CommonVesselRecord(
             source="SAIS_IOR",
             message_id="m1",

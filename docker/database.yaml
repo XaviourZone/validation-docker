@@ -1,0 +1,26 @@
+database:
+  wrs:
+    path: runtime/reference/wrs.db
+  pans:
+    path: runtime/reference/pans.db
+  nsc:
+    path: runtime/reference/nsc.db
+
+imports:
+  wrs:
+    input_dir: runtime/reference/WRS/RAW_DATA
+    staging_db: runtime/reference/wrs_staging.db
+    batch_size: 10000
+  pans:
+    input_dir: runtime/reference/PANS/RAW_DATA
+    poll_interval_seconds: 2.0
+    stability_seconds: 1.0
+    batch_size: 500
+  nsc:
+    input_dir: runtime/reference/NSC/RAW_DATA
+    staging_db: runtime/reference/nsc_staging.db
+    batch_size: 5000
+
+logging:
+  log_dir: runtime/reference/logs
+  level: INFO

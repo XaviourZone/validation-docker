@@ -54,4 +54,4 @@ def get_service_controller(
         else:
             return LinuxSystemdController(workspace_root)
     else:
-        raise ValueError(f"Unknown service control mode: '{mode}'. Expected 'auto', 'windows', or 'systemd'.")
+        raise ValueError(f"Unknown service control mode: '{mode}'. Expected 'auto', 'windows', 'systemd', or 'none'.")

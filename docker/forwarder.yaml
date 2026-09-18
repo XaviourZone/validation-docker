@@ -1,0 +1,19 @@
+server:
+  http_host: "0.0.0.0"
+  http_port: 8082
+spool:
+  input_dir: "Validation/Data_Forwarder/spool/pending"
+  archive_dir: "Validation/Data_Forwarder/spool/delivered"
+  failed_dir: "Validation/Data_Forwarder/spool/failed"
+  state_db: "Validation/Data_Forwarder/state/forwarder.db"
+  secret_file: "Validation/Data_Forwarder/state/forwarder_secrets.json"
+  poll_interval_seconds: 1
+  claim_timeout_seconds: 300
+retry:
+  max_attempts: 5
+  initial_delay_seconds: 2
+  max_delay_seconds: 60
+  multiplier: 2.0
+destinations: {}
+logging:
+  level: "INFO"

@@ -1,0 +1,26 @@
+[Unit]
+Description=Validation Maritime Data Forwarder Service
+After=network.target validation-parser.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=validation
+Group=validation
+WorkingDirectory=/opt/validation/Validation/Data_Forwarder
+Environment=PYTHONUNBUFFERED=1
+Environment=VALIDATION_HOME=/opt/validation
+ExecStart=/usr/bin/python3 -m app.main --config config/forwarder.yaml
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

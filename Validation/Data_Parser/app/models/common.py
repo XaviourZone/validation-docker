@@ -1,4 +1,4 @@
-"""Common data models and internal vessel representation for Data Parser."""
+"""Common data models for Router -> Parser -> Enrichment -> XML."""
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class ParserEnvelope:
-    """Incoming envelope forwarded by Data Router over TCP."""
     message_id: str
     source: str
     input_type: str
@@ -33,33 +32,40 @@ class ParserEnvelope:
 
 @dataclass
 class CommonVesselRecord:
-    """Standardized internal vessel position / static record.
-    
-    Preserves source provenance and normalizes core navigation/identity attributes.
-    """
-    source: str                          # Original source (e.g. SAIS_IOR, SAIS_GLOBAL, MSIS, etc.)
-    message_id: str                      # Router envelope message_id
-    record_id: str                       # Unique per-record identifier
-    timestamp: str                       # ISO-8601 UTC timestamp
-    mmsi: Optional[int] = None           # 9-digit Maritime Mobile Service Identity
-    imo: Optional[int] = None            # International Maritime Organization number
-    vessel_name: Optional[str] = None    # Cleaned vessel name
-    callsign: Optional[str] = None       # Radio call sign
-    latitude: Optional[float] = None     # Decimal degrees (-90.0 to 90.0)
-    longitude: Optional[float] = None    # Decimal degrees (-180.0 to 180.0)
-    sog: Optional[float] = None          # Speed over ground in knots
-    cog: Optional[float] = None          # Course over ground in degrees (0.0 to 360.0)
-    true_heading: Optional[float] = None # True heading in degrees (0 to 359)
-    nav_status: Optional[int] = None     # Navigational status code (0 to 15)
-    rot: Optional[float] = None          # Rate of turn
-    draught: Optional[float] = None      # Current draught in meters
-    vessel_type: Optional[str] = None    # Vessel type description or code
-    destination: Optional[str] = None    # Stated destination port/area
-    eta: Optional[str] = None            # Estimated time of arrival
-    length: Optional[float] = None       # Overall length in meters
-    width: Optional[float] = None        # Overall beam/width in meters
-    app_message_id: Optional[int] = None # Decoded AIS message type (1, 2, 3, 5, etc.)
-    raw_payload: Optional[str] = None    # Original raw sentence or line for auditability
+    """One logical source transmission/line after source-specific decoding."""
+    source: str
+    message_id: str
+    record_id: str
+    timestamp: str
+    mmsi: Optional[int] = None
+    imo: Optional[int] = None
+    vessel_name: Optional[str] = None
+    callsign: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    sog: Optional[float] = None
+    cog: Optional[float] = None
+    true_heading: Optional[float] = None
+    nav_status: Optional[int] = None
+    rot: Optional[float] = None
+    draught: Optional[float] = None
+    vessel_type: Optional[str] = None
+    destination: Optional[str] = None
+    eta: Optional[str] = None
+    length: Optional[float] = None
+    width: Optional[float] = None
+    len_to_bow: Optional[float] = None
+    len_to_stern: Optional[float] = None
+    width_to_port: Optional[float] = None
+    width_to_starboard: Optional[float] = None
+    gross_tonnage: Optional[float] = None
+    altitude: Optional[float] = None
+    origin: Optional[str] = None
+    arrival: Optional[str] = None
+    departure: Optional[str] = None
+    app_message_id: Optional[int] = None
+    raw_payload: Optional[str] = None
+    raw_attributes: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -67,7 +73,6 @@ class CommonVesselRecord:
 
 @dataclass
 class ParseResult:
-    """Result of parsing an entire incoming envelope."""
     message_id: str
     source: str
     success: bool
@@ -77,7 +82,6 @@ class ParseResult:
     errors: List[str] = field(default_factory=list)
 
     def to_ack_dict(self, parser_name: str) -> Dict[str, Any]:
-        """Generate standard ACK/NACK response dictionary for Data Router."""
         return {
             "status": "ACK" if self.success else "NACK",
             "message_id": self.message_id,

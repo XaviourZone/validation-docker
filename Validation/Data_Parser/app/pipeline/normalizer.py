@@ -183,37 +183,27 @@ def normalize_from_common_record(
     rec: CommonVesselRecord,
     receipt_time_ms: Optional[int] = None,
 ) -> NormalizedRecord:
-    """Convert CommonVesselRecord (from NMEA/CSV parser) to NormalizedRecord."""
+    """Convert source-native CommonVesselRecord into the canonical 41-field model."""
     source_id = get_source_id(rec.source)
     rec_ms = receipt_time_ms or int(datetime.now(timezone.utc).timestamp() * 1000)
     tx_ms = iso_to_epoch_ms(rec.timestamp) or rec_ms
 
-    mmsi = rec.mmsi
-    imo = rec.imo
-
-    # Coordinates conversion: input degrees -> output radians
     lat_rad = deg_to_rad(rec.latitude) if rec.latitude is not None else None
     lon_rad = deg_to_rad(rec.longitude) if rec.longitude is not None else None
     cog_rad = deg_to_rad(rec.cog) if rec.cog is not None else None
     hdg_rad = deg_to_rad(rec.true_heading) if rec.true_heading is not None else None
-
-    # Speed: knots -> m/s
     speed_ms = knots_to_ms(rec.sog) if rec.sog is not None else None
 
-    # 3D flag: True if altitude present and non-zero
-    flag_3d = False
+    valid_mmsi = rec.mmsi if is_valid_mmsi(rec.mmsi) else None
 
-    # Track numbers
-    valid_mmsi = mmsi if is_valid_mmsi(mmsi) else None
-
-    norm = NormalizedRecord(
+    return NormalizedRecord(
         source_name=rec.source,
         message_id=rec.message_id,
         sys_source_id=source_id,
-        sys_track_number=mmsi,
+        sys_track_number=rec.mmsi,
         foreign_track_number=valid_mmsi,
-        id_mmsi=mmsi,
-        id_imo=imo,
+        id_mmsi=rec.mmsi,
+        id_imo=rec.imo,
         id_callsign=sanitize_string(rec.callsign),
         vessel_name=sanitize_string(rec.vessel_name),
         kinematic_pos_lla_lat=lat_rad,
@@ -221,7 +211,12 @@ def normalize_from_common_record(
         kinematic_course_true=cog_rad,
         kinematic_heading_true=hdg_rad,
         kinematic_speed=speed_ms,
-        kinematic_flag_3d=flag_3d,
+        kinematic_pos_lla_alt=rec.altitude,
+        kinematic_flag_3d=rec.altitude is not None,
+        ais_lenToBow=int(rec.len_to_bow) if rec.len_to_bow is not None else None,
+        ais_lenToStern=int(rec.len_to_stern) if rec.len_to_stern is not None else None,
+        ais_widthToPort=float(rec.width_to_port) if rec.width_to_port is not None else None,
+        ais_widthToStarboard=float(rec.width_to_starboard) if rec.width_to_starboard is not None else None,
         ais_navStatus=rec.nav_status,
         ais_typeAndCargo=rec.vessel_type,
         app_message_id=rec.app_message_id,
@@ -229,18 +224,23 @@ def normalize_from_common_record(
         vessel_length=rec.length,
         vessel_beam=rec.width,
         vessel_draft=rec.draught,
+        vessel_grosstonnage=rec.gross_tonnage,
+        vessel_remarks=None,
         voyage_destination=sanitize_string(rec.destination),
+        voyage_origin=sanitize_string(rec.origin),
+        voyage_arrival=sanitize_string(rec.arrival),
+        voyage_departure=sanitize_string(rec.departure),
         voyage_eta=rec.eta,
         timestamp_source=tx_ms,
         timestamp_receipt=rec_ms,
         track_quality=15,
         cat_category="Surface",
         cat_identity="Unknown",
-        cat_annotation=get_source_label(rec.source),
-        raw_attributes={"raw_payload": rec.raw_payload},
+        raw_attributes={
+            "raw_payload": rec.raw_payload,
+            **(rec.raw_attributes or {}),
+        },
     )
-    return norm
-
 
 def normalize_from_decoded_track(
     track: DecodedTrack,

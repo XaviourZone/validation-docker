@@ -10,6 +10,7 @@ services:
       - ./runtime/data_inflow:/opt/validation/DATA_INFLOW
       - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
       - ./runtime/parser-logs:/opt/validation/Validation/Data_Parser/logs
+      - ./runtime/parser-state:/opt/validation/Validation/state
       - ./runtime/reference:/opt/validation/runtime/reference
     ports:
       - "10001:10001"
@@ -46,6 +47,7 @@ services:
     command: ["python", "-m", "Validation.Data_Forwarder.app.main", "--config", "/opt/validation/docker/forwarder.yaml"]
     volumes:
       - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
+      - ./runtime/forwarder-state:/opt/validation/Validation/Data_Forwarder/state
     ports:
       - "8082:8082"
 

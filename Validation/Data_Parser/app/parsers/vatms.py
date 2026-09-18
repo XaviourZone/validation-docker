@@ -67,9 +67,12 @@ class VATMSParser(BaseParser):
         """Parse Transas Marine target data sentence $TMVTD."""
         parts = line.split(",")
         if len(parts) < 14:
-            return None
+            raise ValueError("Malformed TMVTD sentence: fewer than 14 fields")
 
-        # Check for drop/delete target message: ...,,D*4E
+        if not _checksum_ok(line):
+            raise ValueError("TMVTD checksum validation failed")
+
+        # Drop/delete target messages are control records, not vessel tracks.
         if parts[-1].startswith("D*") or "D*" in parts[-1]:
             return None
 

@@ -81,7 +81,8 @@ class SAISParser(BaseParser):
     """Parses SAIS_IOR, SAIS_GLOBAL and other standard AIS NMEA feeds."""
 
     def __init__(self):
-        self._fragment_cache: Dict[Tuple[str, str, int], Dict[int, Tuple[str, Optional[str]]]] = {}\n        self._fragment_meta: Dict[Tuple[str, str, int], Tuple[Optional[int], Optional[int]]] = {}
+        self._fragment_cache: Dict[Tuple[str, str, int], Dict[int, Tuple[str, Optional[str]]]] = {}
+        self._fragment_meta: Dict[Tuple[str, str, int], Tuple[Optional[int], Optional[int]]] = {}
 
     @property
     def parser_name(self) -> str:

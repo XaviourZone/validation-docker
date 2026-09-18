@@ -34,6 +34,7 @@ COPY docker/parser.yaml /opt/validation/docker/parser.yaml
 COPY docker/sources.yaml /opt/validation/docker/sources.yaml
 COPY docker/forwarder.yaml /opt/validation/docker/forwarder.yaml
 COPY docker/console.yaml /opt/validation/docker/console.yaml
+COPY docker/database.yaml /opt/validation/docker/database.yaml
 
 EXPOSE 8080 8081 8082 8088 10001 10002 10003 10004 10005
 

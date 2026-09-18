@@ -1,0 +1,31 @@
+[Unit]
+Description=Validation Maritime Data Router Service
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=validation
+Group=validation
+WorkingDirectory=/opt/validation/Validation/Data_Router
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m app.main --config config/sources.yaml
+
+# Graceful restart and shutdown
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5s
+
+# Security sandboxing
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

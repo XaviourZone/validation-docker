@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..models.common import CommonVesselRecord, ParseResult, ParserEnvelope
 from .base import BaseParser
-from .sais import SAISParser, decode_6bit_ascii, to_signed_int
+from .sais import SAISParser, decode_6bit_ascii, to_signed_int, _checksum_ok
 
 
 class VATMSParser(BaseParser):

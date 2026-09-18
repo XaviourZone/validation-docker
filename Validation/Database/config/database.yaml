@@ -1,0 +1,39 @@
+# Validation Database Configuration
+# ---------------------------------------------------------------------------
+# SQLite file-based databases. No username, password, host or port required.
+# Paths are relative to the project root (VALIDATION_HOME) or Database/ dir.
+# ---------------------------------------------------------------------------
+
+database:
+  wrs:
+    path: Validation/Database/WRS/wrs.db
+
+  pans:
+    path: Validation/Database/PANS/pans.db
+
+  nsc:
+    path: Validation/Database/NSC/nsc.db
+
+imports:
+  wrs:
+    input_dir: Validation/Database/WRS/RAW_DATA
+    # WRS is a monthly full replacement. Staging strategy is used.
+    staging_db: Validation/Database/WRS/wrs_staging.db
+    batch_size: 10000
+
+  pans:
+    input_dir: Validation/Database/PANS/RAW_DATA
+    # PANS is a live continuous import.
+    poll_interval_seconds: 2.0
+    stability_seconds: 1.0
+    batch_size: 500
+
+  nsc:
+    input_dir: Validation/Database/NSC/RAW_DATA
+    # NSC refreshes approximately every 15 days.
+    staging_db: Validation/Database/NSC/nsc_staging.db
+    batch_size: 5000
+
+logging:
+  log_dir: Validation/Database/logs
+  level: INFO

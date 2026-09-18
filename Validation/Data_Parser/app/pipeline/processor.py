@@ -12,6 +12,7 @@ from .ais_state import AISStateDB
 from .downstream_parser import DownstreamXMLParser
 from .enricher import VesselEnricher
 from .normalizer import NormalizedRecord, normalize_from_common_record, normalize_from_decoded_track
+from .source_registry import iso_to_epoch_ms
 from .reference_db import ReferenceDB
 from .spoofing import PositionalSpoofingDetector
 from .track_state import TrackStateDB
@@ -62,7 +63,7 @@ class PipelineProcessor:
             detail += f" | reported SOG: {anomaly['reported_sog_knots']:.2f} kt"
         return detail
 
-    def _normalize_record(self, rec: CommonVesselRecord) -> NormalizedRecord:
+    def _normalize_record(self, rec: CommonVesselRecord, receipt_time_ms: Optional[int] = None) -> NormalizedRecord:
         anomaly = None
         if rec.mmsi and rec.app_message_id is not None:
             previous_state = self.ais_state_db.get(rec.mmsi)
@@ -74,7 +75,7 @@ class PipelineProcessor:
                 rec.raw_attributes = dict(rec.raw_attributes or {})
                 rec.raw_attributes["ais_state"] = state
 
-        norm = normalize_from_common_record(rec)
+        norm = normalize_from_common_record(rec, receipt_time_ms=receipt_time_ms)
         if anomaly and anomaly.get("flagged"):
             norm.vessel_remarks = self._positional_remark(anomaly)
         return norm
@@ -119,6 +120,7 @@ class PipelineProcessor:
                             track=trk,
                             source_name=source,
                             message_id=f"{message_id}:{idx}",
+                            receipt_time_ms=iso_to_epoch_ms(envelope.received_at),
                         )
                     )
             except Exception as exc:
@@ -133,7 +135,7 @@ class PipelineProcessor:
                     errors.extend(parsed.errors)
                     for rec in parsed.records:
                         try:
-                            normalized_records.append(self._normalize_record(rec))
+                            normalized_records.append(self._normalize_record(rec, receipt_time_ms=iso_to_epoch_ms(envelope.received_at)))
                         except Exception as exc:
                             errors.append(
                                 f"Normalization/validation error for line-record {rec.record_id}: {exc}"

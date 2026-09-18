@@ -1,0 +1,354 @@
+"""Enricher & Correlator for maritime vessel records.
+
+Performs reference lookup, AIS track-state handling, configurable parser mapping,
+source fallback rules, vigilance/identity calculation and provenance remarks.
+"""
+
+import logging
+from typing import Any, Dict, List, Optional
+
+from .mapping_manager import ParserMappingManager
+from .normalizer import NormalizedRecord
+from .reference_db import ReferenceDB, VesselContext
+from .source_registry import get_source_label, is_valid_imo, is_valid_mmsi, sanitize_string
+from .track_state import TrackStateDB
+from .unlocode import resolve_destination
+
+log = logging.getLogger("parser.enricher")
+
+
+LOGICAL_TO_ATTR = {
+    "ais.lenToBow": "ais_lenToBow", "ais.lenToStern": "ais_lenToStern",
+    "ais.navStatus": "ais_navStatus", "ais.typeAndCargo": "ais_typeAndCargo",
+    "ais.widthToPort": "ais_widthToPort", "ais.widthToStarboard": "ais_widthToStarboard",
+    "app.message.id": "app_message_id", "cat.annotation": "cat_annotation",
+    "cat.category": "cat_category", "cat.identity": "cat_identity",
+    "foreign.track.number": "foreign_track_number", "id.callsign": "id_callsign",
+    "id.imo": "id_imo", "id.mmsi": "id_mmsi", "id.mmsi.destination": "id_mmsi_destination",
+    "kinematic.course.true": "kinematic_course_true", "kinematic.flag.3d": "kinematic_flag_3d",
+    "kinematic.heading.true": "kinematic_heading_true", "kinematic.pos.lla.alt": "kinematic_pos_lla_alt",
+    "kinematic.pos.lla.lat": "kinematic_pos_lla_lat", "kinematic.pos.lla.lon": "kinematic_pos_lla_lon",
+    "kinematic.speed": "kinematic_speed", "sys.source.id": "sys_source_id",
+    "sys.track.number": "sys_track_number", "timestamp.receipt": "timestamp_receipt",
+    "timestamp.source": "timestamp_source", "track.flag.active": "track_flag_active",
+    "track.quality": "track_quality", "vessel.beam": "vessel_beam",
+    "vessel.description": "vessel_description", "vessel.draft": "vessel_draft",
+    "vessel.grosstonnage": "vessel_grosstonnage", "vessel.length": "vessel_length",
+    "vessel.name": "vessel_name", "vessel.remarks": "vessel_remarks",
+    "voyage.arrival": "voyage_arrival", "voyage.departure": "voyage_departure",
+    "voyage.destination": "voyage_destination", "voyage.eta": "voyage_eta",
+    "voyage.etd": "voyage_etd", "voyage.origin": "voyage_origin",
+}
+
+INCOMING_ALIASES = {
+    "mmsi": "id_mmsi", "imo": "id_imo", "callsign": "id_callsign", "vessel_name": "vessel_name",
+    "ship_name": "vessel_name", "vessel_type": "ais_typeAndCargo", "type_and_cargo": "ais_typeAndCargo",
+    "length": "vessel_length", "width": "vessel_beam", "beam": "vessel_beam", "draught": "vessel_draft",
+    "draft": "vessel_draft", "latitude": "kinematic_pos_lla_lat", "longitude": "kinematic_pos_lla_lon",
+    "sog": "kinematic_speed", "cog": "kinematic_course_true", "true_heading": "kinematic_heading_true",
+    "heading": "kinematic_heading_true", "nav_status": "ais_navStatus", "navigation_status": "ais_navStatus",
+    "navigatetion_status": "ais_navStatus", "destination": "voyage_destination", "eta": "voyage_eta",
+    "message_type": "app_message_id",
+}
+
+
+def _parser_name(source: str) -> str:
+    upper = (source or "").upper()
+    for name in ("SAIS", "MSIS", "LRIT", "VATMS", "NAIS"):
+        if name in upper:
+            return name
+    return upper or "GENERIC"
+
+
+class VesselEnricher:
+    """Coordinates reference lookup, mapping, track state, fallbacks and remarks."""
+
+    def __init__(self, reference_db: Optional[ReferenceDB] = None, track_state_db: Optional[TrackStateDB] = None, mapping_manager: Optional[ParserMappingManager] = None):
+        self.ref_db = reference_db or ReferenceDB()
+        self.state_db = track_state_db or TrackStateDB()
+        self.mapping_manager = mapping_manager or ParserMappingManager()
+
+    @staticmethod
+    def _candidate_value(rec: NormalizedRecord, ctx: VesselContext, candidate: str):
+        if ":" not in candidate:
+            return None
+        kind, key = candidate.split(":", 1)
+        if kind == "default":
+            return key
+        if kind == "incoming":
+            attr = INCOMING_ALIASES.get(key, key)
+            return getattr(rec, attr, None)
+        if kind == "ais_state":
+            state = (rec.raw_attributes or {}).get("ais_state") or {}
+            return state.get(key)
+        if kind in {"wrs", "pans", "nsc"}:
+            # ReferenceDB exposes provenance fields directly on VesselContext.
+            return getattr(ctx, key, None)
+        return None
+
+    def _apply_configured_mapping(self, rec: NormalizedRecord, ctx: VesselContext) -> None:
+        """Apply only configured candidates to fields still missing.
+
+        Existing non-empty normalized values remain authoritative. This means the
+        operator can add WRS/PANS/NSC fallbacks without accidentally overwriting a
+        live incoming value.
+        """
+        try:
+            mapping = self.mapping_manager.get(_parser_name(rec.source_name))
+            fields = mapping.get("fields") or {}
+            for logical, candidates in fields.items():
+                attr = LOGICAL_TO_ATTR.get(logical)
+                if not attr or getattr(rec, attr, None) not in (None, ""):
+                    continue
+                for candidate in candidates or []:
+                    value = self._candidate_value(rec, ctx, str(candidate))
+                    if value not in (None, ""):
+                        setattr(rec, attr, value)
+                        break
+        except Exception as exc:
+            log.warning("Parser mapping could not be applied for %s: %s", rec.source_name, exc)
+
+    def enrich(self, rec: NormalizedRecord) -> NormalizedRecord:
+        incoming_mmsi = rec.id_mmsi
+        incoming_imo = rec.id_imo
+        incoming_name = rec.vessel_name
+        incoming_callsign = rec.id_callsign
+
+        ctx: VesselContext = self.ref_db.resolve(mmsi=incoming_mmsi, imo=incoming_imo, callsign=incoming_callsign, vessel_name=incoming_name)
+        self._apply_configured_mapping(rec, ctx)
+
+        effective_mmsi = incoming_mmsi
+        if not is_valid_mmsi(effective_mmsi):
+            for candidate in (ctx.pans_mmsi, ctx.nsc_mmsi, ctx.wrs_mmsi):
+                if candidate and is_valid_mmsi(candidate):
+                    effective_mmsi = candidate
+                    break
+        if effective_mmsi and is_valid_mmsi(effective_mmsi):
+            is_active = self.state_db.upsert(
+                mmsi=effective_mmsi,
+                imo=incoming_imo or ctx.wrs_imo,
+                vessel_name=incoming_name or ctx.wrs_vessel_name,
+                latitude=rec.kinematic_pos_lla_lat,
+                longitude=rec.kinematic_pos_lla_lon,
+                tx_timestamp_iso=str(rec.timestamp_source or ""),
+                source=rec.source_name,
+            )
+            rec.track_flag_active = is_active
+        else:
+            rec.track_flag_active = True
+
+        ref_mmsi = ctx.pans_mmsi or ctx.nsc_mmsi or ctx.wrs_mmsi
+        try:
+            ref_mmsi = int(float(str(ref_mmsi))) if ref_mmsi is not None else None
+        except Exception:
+            ref_mmsi = None
+        if is_valid_mmsi(incoming_mmsi):
+            rec.foreign_track_number = incoming_mmsi
+        elif ref_mmsi and is_valid_mmsi(ref_mmsi):
+            rec.foreign_track_number = ref_mmsi
+        elif not is_valid_mmsi(rec.foreign_track_number):
+            rec.foreign_track_number = None
+        rec.sys_track_number = incoming_mmsi
+
+        # Reference enrichment is field-availability driven.
+        # PANS is checked first, then NSC, then WRS. A source only contributes
+        # when that source resolved a vessel; a missing field falls through to
+        # the next available source. Incoming live data remains authoritative.
+        ref_order = tuple(
+            source for source, matched in (
+                ("PANS", ctx.pans_matched),
+                ("NSC", ctx.nsc_matched),
+                ("WRS", ctx.wrs_matched),
+            )
+            if matched
+        ) or ("PANS", "NSC", "WRS")
+
+        def ref_value(*fields):
+            for source in ref_order:
+                prefix = source.lower()
+                for field in fields:
+                    value = getattr(ctx, f"{prefix}_{field}", None)
+                    if value not in (None, ""):
+                        return value
+            return None
+
+        resolved_name = None
+        if incoming_name and incoming_name.upper() not in ("UNKNOWN", "-", "N/A", "NONE"):
+            resolved_name = incoming_name
+        else:
+            resolved_name = ref_value("vessel_name") or "UNKNOWN"
+        rec.vessel_name = sanitize_string(resolved_name)
+
+        if not rec.id_callsign:
+            rec.id_callsign = ref_value("callsign")
+
+        if not rec.id_imo or not is_valid_imo(rec.id_imo):
+            for source in ref_order:
+                value = getattr(ctx, f"{source.lower()}_imo", None)
+                if value and is_valid_imo(value):
+                    rec.id_imo = value
+                    break
+
+        if rec.ais_typeAndCargo is None:
+            # PANS/NSC store descriptive vessel type text; WRS also has a
+            # numeric AIS type decode. Prefer the first available source and
+            # retain the existing WRS numeric decode as the WRS fallback.
+            for source in ref_order:
+                if source == "PANS" and ctx.pans_vessel_type:
+                    rec.ais_typeAndCargo = ctx.pans_vessel_type
+                elif source == "NSC" and ctx.nsc_type:
+                    rec.ais_typeAndCargo = ctx.nsc_type
+                elif source == "WRS":
+                    if ctx.wrs_ais_type_code is not None:
+                        rec.ais_typeAndCargo = ctx.wrs_ais_type_code
+                    elif ctx.wrs_vessel_type:
+                        rec.ais_typeAndCargo = ctx.wrs_vessel_type
+                if rec.ais_typeAndCargo is not None:
+                    break
+
+        if not rec.vessel_description:
+            rec.vessel_description = ref_value("vessel_type")
+
+        if rec.vessel_length is None:
+            rec.vessel_length = ref_value("loa")
+        if rec.vessel_beam is None:
+            rec.vessel_beam = ref_value("breadth", "beam")
+        if rec.vessel_draft is None:
+            rec.vessel_draft = ref_value("draft", "max_draft")
+        if rec.vessel_grosstonnage is None:
+            rec.vessel_grosstonnage = ref_value("gross", "grt")
+
+        effective_vigilance = ctx.wrs_vigilance_score if ctx.wrs_vigilance_score is not None else rec.id_mmsi_destination
+        if effective_vigilance is not None:
+            rec.id_mmsi_destination = int(effective_vigilance)
+            score = float(effective_vigilance)
+            rec.cat_identity = 1 if score < 300 else (4 if score > 600 else 3)
+
+        # Voyage fields exist in PANS and WRS; NSC has no voyage columns.
+        # Preserve incoming AIS first, then use the selected MMSI reference
+        # source, followed by the remaining reference sources.
+        voyage_fields = {
+            "voyage_destination": {
+                "PANS": ("pans_berman_dest", "pans_npc"),
+                "WRS": ("wrs_calling_place",),
+                "NSC": (),
+            },
+            "voyage_origin": {
+                "PANS": ("pans_org_dep",),
+                "WRS": ("wrs_calling_place",),
+                "NSC": (),
+            },
+            "voyage_departure": {
+                "PANS": ("pans_lpc", "pans_berman_lpc"),
+                "WRS": ("wrs_calling_sailing",),
+                "NSC": (),
+            },
+            "voyage_arrival": {
+                "PANS": ("pans_berman_eta",),
+                "WRS": ("wrs_calling_arrival",),
+                "NSC": (),
+            },
+            "voyage_eta": {
+                "PANS": ("pans_eta", "pans_berman_eta"),
+                "WRS": (),
+                "NSC": (),
+            },
+            "voyage_etd": {
+                "PANS": ("pans_etd", "pans_berman_etd"),
+                "WRS": (),
+                "NSC": (),
+            },
+        }
+        # Convert an incoming destination as well as a reference-supplied
+        # destination. This keeps UN/LOCODE handling independent of source.
+        if rec.voyage_destination:
+            rec.voyage_destination = resolve_destination(rec.voyage_destination)
+
+        for attr, source_fields in voyage_fields.items():
+            if getattr(rec, attr, None):
+                continue
+            for source in ref_order:
+                for field in source_fields.get(source, ()):
+                    value = getattr(ctx, field, None)
+                    if value not in (None, ""):
+                        if attr == "voyage_destination":
+                            value = resolve_destination(value)
+                        setattr(rec, attr, value)
+                        break
+                if getattr(rec, attr, None):
+                    break
+        if ctx.wrs_status_decode: rec.cat_annotation = ctx.wrs_status_decode
+
+        # Remarks are built only from explicit evidence. PANS/NSC CLEARED
+        # currently records that the vessel was resolved in that reference DB.
+        remarks_parts: List[str] = []
+        if rec.vessel_remarks and rec.vessel_remarks not in ("-", "None"):
+            remarks_parts.append(rec.vessel_remarks)
+        if ctx.is_pans_cleared():
+            remarks_parts.append("PANS CLEARED")
+        if ctx.is_nsc_cleared():
+            remarks_parts.append("NSC CLEARED")
+
+        # MMSI spoofing: only for a transmitted MMSI shorter than 9 digits,
+        # with a valid transmitted IMO. Resolve WRS by that IMO and compare
+        # the transmitted MMSI with the WRS MMSI.
+        transmitted_mmsi_text = str(incoming_mmsi).strip() if incoming_mmsi is not None else ""
+        malformed_mmsi = transmitted_mmsi_text.isdigit() and len(transmitted_mmsi_text) < 9
+        if malformed_mmsi and is_valid_imo(incoming_imo):
+            if (
+                ctx.wrs_match_method == "IMO"
+                and ctx.wrs_mmsi is not None
+                and is_valid_mmsi(ctx.wrs_mmsi)
+                and transmitted_mmsi_text != str(ctx.wrs_mmsi)
+            ):
+                remarks_parts.append(
+                    f"MMSI SPOOFING — transmitted MMSI: {transmitted_mmsi_text}; "
+                    f"WRS MMSI: {ctx.wrs_mmsi}"
+                )
+
+        # IMO spoofing: use the transmitted 9-digit MMSI to resolve WRS, then
+        # compare the transmitted IMO with the IMO stored against that MMSI.
+        if (
+            is_valid_mmsi(incoming_mmsi)
+            and is_valid_imo(incoming_imo)
+            and ctx.wrs_match_method == "MMSI"
+            and ctx.wrs_imo is not None
+            and is_valid_imo(ctx.wrs_imo)
+            and int(incoming_imo) != int(ctx.wrs_imo)
+        ):
+            remarks_parts.append(
+                f"IMO SPOOFING — transmitted IMO: {incoming_imo}; "
+                f"WRS IMO: {ctx.wrs_imo}"
+            )
+
+        # Name spoofing: check the vessel resolved by transmitted MMSI in WRS.
+        # Only flag a completely changed name. Case is ignored and either name
+        # containing the other is treated as the same vessel name.
+        if (
+            is_valid_mmsi(incoming_mmsi)
+            and ctx.wrs_match_method == "MMSI"
+            and ctx.wrs_vessel_name
+            and incoming_name
+        ):
+            transmitted_name = " ".join(str(incoming_name).strip().upper().split())
+            wrs_name = " ".join(str(ctx.wrs_vessel_name).strip().upper().split())
+            if (
+                transmitted_name not in ("", "UNKNOWN", "-", "N/A", "NONE")
+                and wrs_name
+                and transmitted_name not in wrs_name
+                and wrs_name not in transmitted_name
+            ):
+                remarks_parts.append(
+                    f"NAME SPOOFING — transmitted name: {incoming_name}; "
+                    f"reference name: {ctx.wrs_vessel_name}"
+                )
+
+        remarks_parts.append(f"SOURCE: {get_source_label(rec.source_name)}")
+        seen = set()
+        deduped = []
+        for remark in remarks_parts:
+            if remark not in seen:
+                seen.add(remark)
+                deduped.append(remark)
+        rec.vessel_remarks = " | ".join(deduped)
+        return rec

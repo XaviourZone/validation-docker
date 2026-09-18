@@ -54,3 +54,19 @@ The current headerless mapping is based on the actual 20-column sample:
 0 MMSI, 1 latitude, 2 longitude, 3 SOG, 4 COG, 5 heading, 7 navigation status, 8 timestamp, 11 vessel name, 12 IMO, 13 callsign, 14 length, 15 width, 16 draught, 17 destination, 18 vessel type, 19 ETA.
 
 The final acceptance test must verify this against a representative set of LRIT files, including empty files and malformed rows.
+
+## Measured sample inventory
+
+The representative files in the established sample repository contain the following non-empty physical-line counts:
+
+| Source | File | Non-empty lines | Observed special records |
+|---|---|---:|---|
+| SAIS_IOR | EarthIOR_2026-06-25-14-21-28.csv | 10,000 | 815 multipart AIS fragment lines |
+| SAIS_GLOBAL | EarthGLOBAL_2026-06-25-14-21-39.csv | 10,000 | 278 multipart AIS fragment lines |
+| MSIS | nc3in_20260601_130155.csv | 251 | 1 header + 250 data rows |
+| LRIT | LRIT_03062026_093001.csv | 297 | Headerless 20-column rows |
+| VATMS_EAST | vatms_east.txt | 372 | 290 multipart !WSVDM fragment lines |
+| VATMS_WEST | vatms_west.txt | 2,393 | 870 target-drop D records |
+| NAIS | Nais.txt | 1,598 | 655 $ABVSI status/control records; 458 multipart AIS fragment lines |
+
+These counts are sample inventory measurements only. They are not yet the final parser-record/XML-output acceptance counts.

@@ -1,0 +1,139 @@
+data_inflow:
+  base_dir: DATA_INFLOW
+parser_destinations:
+  SAIS:
+    host: 127.0.0.1
+    port: 10001
+    framing: ndjson
+    timeout_seconds: 5.0
+    keep_alive: true
+  MSIS:
+    host: 127.0.0.1
+    port: 10002
+    framing: ndjson
+    timeout_seconds: 5.0
+    keep_alive: true
+  LRIT:
+    host: 127.0.0.1
+    port: 10003
+    framing: ndjson
+    timeout_seconds: 5.0
+    keep_alive: true
+  VATMS:
+    host: 127.0.0.1
+    port: 10004
+    framing: ndjson
+    timeout_seconds: 5.0
+    keep_alive: true
+  NAIS:
+    host: 127.0.0.1
+    port: 10005
+    framing: ndjson
+    timeout_seconds: 5.0
+    keep_alive: true
+sources:
+  SAIS_IOR:
+    type: file
+    folder: SAIS_IOR
+    parser: SAIS
+    enabled: true
+    poll_interval_seconds: 1.0
+    stability_window_seconds: 1.0
+    file_patterns:
+    - '*.csv'
+    - '*.txt'
+    - '*'
+    preserve_file: true
+  SAIS_GLOBAL:
+    type: file
+    folder: SAIS_GLOBAL
+    parser: SAIS
+    enabled: true
+    poll_interval_seconds: 1.0
+    stability_window_seconds: 1.0
+    file_patterns:
+    - '*.csv'
+    - '*.txt'
+    - '*'
+    preserve_file: true
+  MSIS:
+    type: file
+    folder: MSIS
+    parser: MSIS
+    enabled: true
+    poll_interval_seconds: 1.0
+    stability_window_seconds: 1.0
+    file_patterns:
+    - '*.csv'
+    - '*.txt'
+    - '*'
+    preserve_file: true
+  LRIT:
+    type: file
+    folder: LRIT
+    parser: LRIT
+    enabled: true
+    poll_interval_seconds: 1.0
+    stability_window_seconds: 1.0
+    file_patterns:
+    - '*.csv'
+    - '*.txt'
+    - '*'
+    preserve_file: true
+  VATMS_EAST:
+    type: tcp
+    remote_host: 127.0.0.1
+    remote_port: 20001
+    parser: VATMS
+    enabled: true
+    framing: line
+    delimiter: '
+
+      '
+    max_line_length: 65536
+    reconnect_initial_delay: 2.0
+    reconnect_max_delay: 60.0
+    reconnect_multiplier: 2.0
+  VATMS_WEST:
+    type: tcp
+    remote_host: 127.0.0.1
+    remote_port: 20002
+    parser: VATMS
+    enabled: true
+    framing: line
+    delimiter: '
+
+      '
+    max_line_length: 65536
+    reconnect_initial_delay: 2.0
+    reconnect_max_delay: 60.0
+    reconnect_multiplier: 2.0
+  NAIS:
+    type: tcp
+    remote_host: 127.0.0.1
+    remote_port: 20003
+    parser: NAIS
+    enabled: true
+    framing: line
+    delimiter: '
+
+      '
+    max_line_length: 65536
+    reconnect_initial_delay: 2.0
+    reconnect_max_delay: 60.0
+    reconnect_multiplier: 2.0
+retry:
+  max_attempts: 5
+  initial_delay_seconds: 2.0
+  max_delay_seconds: 60.0
+  backoff_multiplier: 2.0
+queue:
+  max_size: 10000
+  worker_count: 4
+  high_watermark_ratio: 0.8
+monitoring:
+  enabled: true
+  http_host: 127.0.0.1
+  http_port: 8080
+state:
+  db_path: state/router_state.db

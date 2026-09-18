@@ -41,6 +41,14 @@ class DatabaseClient:
             "pans_once": False
         }
 
+    def _importer_command(self, script: Path, *args: str):
+        command = [sys.executable, str(script)]
+        configured = os.environ.get("VALIDATION_DATABASE_CONFIG")
+        if configured:
+            command.extend(["--config", configured])
+        command.extend(args)
+        return command
+
     def _load_config(self) -> dict:
         try:
             with open(self.db_config_path, "r", encoding="utf-8") as f:
@@ -215,7 +223,7 @@ class DatabaseClient:
         if self.config_manager:
             self.config_manager._log_audit_event("DB_WRS_REFRESH", "SYSTEM", {"message": "Started WRS full refresh"})
         try:
-            cmd = [sys.executable, str(self.wrs_importer_script)]
+            cmd = self._importer_command(self.wrs_importer_script)
             self.logger.info("Executing WRS Importer...")
             def run_importer():
                 try:
@@ -243,7 +251,7 @@ class DatabaseClient:
         if self.config_manager:
             self.config_manager._log_audit_event("DB_NSC_REFRESH", "SYSTEM", {"message": "Started NSC full refresh"})
         try:
-            cmd = [sys.executable, str(self.nsc_importer_script)]
+            cmd = self._importer_command(self.nsc_importer_script)
             self.logger.info("Executing NSC Importer...")
             def run_importer():
                 try:
@@ -275,7 +283,7 @@ class DatabaseClient:
         if self.config_manager:
             self.config_manager._log_audit_event("DB_PANS_PROCESS_NOW", "SYSTEM", {"message": "Started PANS one-shot process"})
         try:
-            cmd = [sys.executable, str(self.pans_importer_script), "--once"]
+            cmd = self._importer_command(self.pans_importer_script, "--once")
             self.logger.info("Executing PANS Importer (One-shot)...")
             def run_importer():
                 try:

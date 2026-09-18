@@ -1,0 +1,34 @@
+# Validation Data Parser Service Configuration
+server:
+  http_host: "127.0.0.1"
+  http_port: 8081
+
+endpoints:
+  SAIS:
+    port: 10001
+    sources: ["SAIS_IOR", "SAIS_GLOBAL"]
+    framing: "ndjson"
+  MSIS:
+    port: 10002
+    sources: ["MSIS"]
+    framing: "ndjson"
+  LRIT:
+    port: 10003
+    sources: ["LRIT"]
+    framing: "ndjson"
+  VATMS:
+    port: 10004
+    sources: ["VATMS_EAST", "VATMS_WEST"]
+    framing: "ndjson"
+  NAIS:
+    port: 10005
+    sources: ["NAIS"]
+    framing: "ndjson"
+
+# Finalized XML is written atomically here and consumed by Data Forwarder.
+output:
+  xml_spool_dir: "Validation/Data_Forwarder/spool/pending"
+
+logging:
+  level: "INFO"
+  log_path: "Validation/Data_Parser/logs/parser.log"

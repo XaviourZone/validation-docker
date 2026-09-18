@@ -18,7 +18,7 @@ from .parsers.sais import SAISParser
 from .parsers.vatms import VATMSParser
 from .parsers.mapped import MappedParser
 from .pipeline.mapping_manager import ParserMappingManager
-from .pipeline.processor import PipelineProcessor
+from .pipeline.processor import PipelineProcessor\nfrom .pipeline.reference_db import ReferenceDB
 from .server.api_server import ParserAPIServer
 from .server.endpoint import ParserEndpointServer
 
@@ -95,7 +95,20 @@ def main():
         xml_output_dir = Path(xml_output_dir)
         if not xml_output_dir.is_absolute():
             xml_output_dir = workspace_root / xml_output_dir
-    processor = PipelineProcessor(xml_output_dir=xml_output_dir)
+    ref_cfg = config.get("reference_databases", {}) or {}
+    def _resolve_ref_path(value):
+        if not value:
+            return None
+        p = Path(value)
+        return p if p.is_absolute() else workspace_root / p
+
+    reference_db = ReferenceDB(
+        wrs_path=_resolve_ref_path(ref_cfg.get("wrs")),
+        pans_path=_resolve_ref_path(ref_cfg.get("pans")),
+        nsc_path=_resolve_ref_path(ref_cfg.get("nsc")),
+    )
+
+    processor = PipelineProcessor(reference_db=reference_db, xml_output_dir=xml_output_dir)
 
     endpoints_cfg = config.get("endpoints", {})
     endpoint_servers: List[ParserEndpointServer] = []

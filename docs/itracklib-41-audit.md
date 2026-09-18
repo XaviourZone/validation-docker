@@ -32,7 +32,7 @@ This matrix records the direct dotted XML-field branches currently found by sear
 | 24 | sys.track.number | no | — | no direct dotted branch |
 | 25 | timestamp.receipt | yes | 353 | directly consumed |
 | 26 | timestamp.source | yes | 330 | directly consumed |
-| 27 | track.flag.active | yes | 945 | directly consumed |
+| 27 | track.flag.active | yes, but no active setter | 945 | branch exists; value is not forwarded to C library |
 | 28 | track.quality | yes | 953 | directly consumed |
 | 29 | vessel.beam | no | — | no direct dotted branch |
 | 30 | vessel.description | yes | 1099 | directly consumed |
@@ -51,8 +51,9 @@ This matrix records the direct dotted XML-field branches currently found by sear
 ## Count
 
 - Canonical XML fields: 41
-- Direct dotted iTrackLib branches: 33
-- No direct dotted branch: 8
+- Canonical fields with a direct `saisDataId` branch: 33
+- Canonical fields with no direct dotted branch: 8
+- Of those 33 branches, `track.flag.active` has no active C-library setter; its apparent setter is commented out.
 
 ## Exact downstream observations
 

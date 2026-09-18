@@ -81,7 +81,7 @@ class SAISParser(BaseParser):
     """Parses SAIS_IOR, SAIS_GLOBAL and other standard AIS NMEA feeds."""
 
     def __init__(self):
-        self._fragment_cache: Dict[Tuple[str, str, int], Dict[int, Tuple[str, Optional[str]]]] = {}
+        self._fragment_cache: Dict[Tuple[str, str, int], Dict[int, Tuple[str, Optional[str]]]] = {}\n        self._fragment_meta: Dict[Tuple[str, str, int], Tuple[Optional[int], Optional[int]]] = {}
 
     @property
     def parser_name(self) -> str:
@@ -144,13 +144,46 @@ class SAISParser(BaseParser):
                 fill_bits = 0
 
         if total > 1:
+            # Physical-line contract: every NMEA fragment must produce one
+            # output record. A fragment that cannot yet be fully reassembled
+            # emits only facts available from that fragment/cache; the final
+            # fragment additionally emits the complete decoded AIS message.
             key = (source, seq_id, total)
-            self._fragment_cache.setdefault(key, {})[seq] = (payload, record_time)
-            if len(self._fragment_cache[key]) < total:
-                return None
-            payload = "".join(self._fragment_cache[key][i][0] for i in range(1, total + 1))
-            record_time = self._fragment_cache[key].get(1, (payload, record_time))[1] or record_time
-            del self._fragment_cache[key]
+            cache = self._fragment_cache.setdefault(key, {})
+            cache[seq] = (payload, record_time)
+
+            if seq == 1:
+                first_bits = decode_6bit_ascii(payload)
+                if len(first_bits) >= 38:
+                    self._fragment_meta[key] = (
+                        int(first_bits[0:6], 2),
+                        int(first_bits[8:38], 2),
+                    )
+
+            if len(cache) < total:
+                meta = self._fragment_meta.get(key, (None, None))
+                fragment_record = CommonVesselRecord(
+                    source=source,
+                    message_id=message_id,
+                    record_id=f"{source}:{message_id}:{line_num}:fragment-{seq}",
+                    timestamp=record_time,
+                    mmsi=meta[1],
+                    app_message_id=meta[0],
+                    raw_payload=line,
+                    raw_attributes={
+                        "multipart": True,
+                        "fragment_number": seq,
+                        "fragment_count": total,
+                        "sequence_id": seq_id,
+                        "complete_decode": False,
+                    },
+                )
+                return fragment_record
+
+            payload = "".join(cache[i][0] for i in range(1, total + 1))
+            record_time = cache.get(1, (payload, record_time))[1] or record_time
+            self._fragment_cache.pop(key, None)
+            self._fragment_meta.pop(key, None)
 
         bit_str = decode_6bit_ascii(payload)
         if fill_bits:

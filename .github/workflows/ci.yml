@@ -25,7 +25,7 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q Validation
       - name: XML contract tests
-        run: python -m unittest Validation.Data_Parser.tests.test_xml_contract Validation.Data_Parser.tests.test_real_source_samples
+        run: python -m unittest Validation.Data_Parser.tests.test_xml_contract Validation.Data_Parser.tests.test_real_source_samples Validation.Data_Parser.tests.test_processor_spooling
 
 
   docker-build:

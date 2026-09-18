@@ -4,7 +4,8 @@ from pathlib import Path
 
 from Validation.Data_Parser.app.models.common import ParserEnvelope, CommonVesselRecord
 from Validation.Data_Parser.app.pipeline.normalizer import normalize_from_common_record
-from Validation.Data_Parser.app.pipeline.xml_generator import FIELD_SPECS, XTrackXMLGenerator\nfrom Validation.Data_Parser.app.pipeline.normalizer import LOGICAL_FIELDS_41
+from Validation.Data_Parser.app.pipeline.xml_generator import FIELD_SPECS, XTrackXMLGenerator
+from Validation.Data_Parser.app.pipeline.normalizer import LOGICAL_FIELDS_41
 
 
 class TestXMLContract(unittest.TestCase):

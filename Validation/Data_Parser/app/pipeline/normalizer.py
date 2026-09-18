@@ -30,6 +30,65 @@ from .xml_decoder import DecodedTrack
 
 log = logging.getLogger("parser.normalizer")
 
+# Downstream iTrackLib expects descriptive AIS navigation/type strings, not raw numeric codes.
+NAV_STATUS_TEXT = {
+    0: "UNDER WAY USING ENGINE", 1: "ANCHORED", 2: "NOT UNDER COMMAND",
+    3: "RESTRICTED MANOEUVRABILITY", 4: "CONSTRAINED BY HER DRAUGHT",
+    5: "MOORED", 6: "AGROUND", 7: "ENGAGED IN FISHING", 8: "UNDER WAY SAILING",
+    9: "RESERVED FOR FUTURE AMENDMENT OF NAVIGATIONAL STATUS FOR SHIPS CARRYING DG, HS, OR MP, OR IMO HAZARD OR POLLUTANT CATEGORY C (HSC)",
+    10: "RESERVED FOR FUTURE AMENDMENT OF NAVIGATIONAL STATUS FOR SHIPS CARRYING DG, HS OR MP, OR IMO HAZARD OR POLLUTANT CATEGORY A (WIG)",
+    11: "RESERVED FOR FUTURE USE", 12: "RESERVED FOR FUTURE USE", 13: "RESERVED FOR FUTURE USE",
+    14: "RESERVED FOR FUTURE USE", 15: "NOT DEFINED",
+}
+
+# AIS type 5/19 numeric vessel type -> the labels used by the authoritative
+# iTrackLib typeAndCargo decoder. Category-specific AIS codes are preserved.
+AIS_TYPE_TEXT = {
+    0: "UNDEFINED", 20: "WING IN GROUND", 30: "FISHING", 31: "TOWING VESSEL",
+    32: "TOWING VESSEL", 33: "VESSEL ENGAGED IN DREDGING OR UNDERWATER OPERATIONS",
+    34: "DIVER", 35: "MILITARY OPERATIONS", 36: "SAILING", 37: "PLEASURE CRAFT",
+    40: "HIGH SPEED CRAFT", 50: "PILOT VESSEL", 51: "SEARCH AND RESCUE VESSEL",
+    52: "TUG", 53: "PORT TENDER", 54: "VESSEL WITH ANTI-POLLUTION FACILITIES OR EQUIPMENT",
+    55: "LAW ENFORCEMENT VESSEL", 56: "LOCAL VESSEL TYPE 56", 57: "LOCAL VESSEL TYPE 57",
+    58: "MEDICAL TRANSPORT", 59: "SHIP ACCORDING TO RR RESOLUTION NO. 18",
+    60: "PASSENGER SHIP", 70: "CARGO SHIP", 80: "TANKER", 90: "OTHER VESSEL",
+}
+
+def normalize_nav_status(value: Any) -> Optional[str]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return NAV_STATUS_TEXT.get(int(float(stripped)), "NOT DEFINED")
+        except ValueError:
+            return stripped
+    try:
+        return NAV_STATUS_TEXT.get(int(value), "NOT DEFINED")
+    except (TypeError, ValueError):
+        return None
+
+
+def normalize_type_and_cargo(value: Any) -> Optional[str]:
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            code = int(float(stripped))
+        except ValueError:
+            return stripped
+    else:
+        try:
+            code = int(value)
+        except (TypeError, ValueError):
+            return str(value)
+    return AIS_TYPE_TEXT.get(code, "OTHER VESSEL")
+
 
 # The 41 canonical logical field identifiers
 LOGICAL_FIELDS_41 = [

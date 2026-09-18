@@ -55,6 +55,12 @@ class TestRealSourceSamples(unittest.TestCase):
         result = VATMSParser().parse(self.envelope("VATMS_EAST", line))
         self.assertEqual(result.records_parsed, 1)
 
+    def test_vatms_west_bad_checksum_is_rejected(self):
+        line = "$TMVTD,230726,103413.05,R,0327,1239,1831.9035,N,07216.6640,E,000.0,T,000.0,N,,,,,,,,,,,0,0,,,,,0,T*00"
+        result = VATMSParser().parse(self.envelope("VATMS_WEST", line))
+        self.assertEqual(result.records_parsed, 0)
+        self.assertEqual(result.records_rejected, 1)
+
     def test_vatms_west_real_rich_line(self):
         line = "$TMVTD,230726,103414.03,R,0282,GREATSHIP ROOPA,1834.4993,N,07212.4962,E,210.6,T,003.1,N,NSC Cleared Vessel,AVWE,7800,1700,580,,419000621,2200,-250,9570761,0,0,99,9,HEERA FLD           ,07162000,1,T*5F"
         result = VATMSParser().parse(self.envelope("VATMS_WEST", line))

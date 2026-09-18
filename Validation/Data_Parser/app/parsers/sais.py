@@ -232,7 +232,7 @@ class SAISParser(BaseParser):
             return rec
 
         # Type 5: Static and voyage related data.
-        if msg_type == 5 and len(bit_str) >= 420:
+        if msg_type == 5 and len(bit_str) >= 422:
             imo = _int(bit_str, 40, 70)
             rec.imo = imo if imo else None
             rec.callsign = decode_ais_string(bit_str[70:112]) or None
@@ -241,6 +241,10 @@ class SAISParser(BaseParser):
             rec.vessel_type = str(vtype) if vtype not in (None, 0) else None
             bow, stern = _int(bit_str, 240, 249), _int(bit_str, 249, 258)
             port, starboard = _int(bit_str, 258, 264), _int(bit_str, 264, 270)
+            rec.len_to_bow = float(bow) if bow is not None else None
+            rec.len_to_stern = float(stern) if stern is not None else None
+            rec.width_to_port = float(port) if port is not None else None
+            rec.width_to_starboard = float(starboard) if starboard is not None else None
             rec.length = float((bow or 0) + (stern or 0)) or None
             rec.width = float((port or 0) + (starboard or 0)) or None
             draught = _int(bit_str, 294, 302)

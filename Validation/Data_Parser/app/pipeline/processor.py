@@ -211,8 +211,7 @@ class PipelineProcessor:
         # is the exact XML document. For multi-record file envelopes it is an
         # explicit concatenation of independent documents for diagnostics only;
         # the operational spool remains one file per record.
-        return result, "
-".join(generated_docs)
+        return result, "\\n".join(generated_docs)
 
     def _get_default_parser(self, source: str) -> Optional[Any]:
         src = (source or "").upper()

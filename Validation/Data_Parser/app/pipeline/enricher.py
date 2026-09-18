@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .mapping_manager import ParserMappingManager
-from .normalizer import NormalizedRecord
+from .normalizer import NormalizedRecord, normalize_type_and_cargo
 from .reference_db import ReferenceDB, VesselContext
 from .source_registry import get_source_label, is_valid_imo, is_valid_mmsi, sanitize_string
 from .track_state import TrackStateDB
@@ -176,7 +176,7 @@ class VesselEnricher:
         if incoming_name and incoming_name.upper() not in ("UNKNOWN", "-", "N/A", "NONE"):
             resolved_name = incoming_name
         else:
-            resolved_name = ref_value("vessel_name") or "UNKNOWN"
+            resolved_name = ref_value("vessel_name")
         rec.vessel_name = sanitize_string(resolved_name)
 
         if not rec.id_callsign:
@@ -200,7 +200,7 @@ class VesselEnricher:
                     rec.ais_typeAndCargo = ctx.nsc_type
                 elif source == "WRS":
                     if ctx.wrs_ais_type_code is not None:
-                        rec.ais_typeAndCargo = ctx.wrs_ais_type_code
+                        rec.ais_typeAndCargo = normalize_type_and_cargo(ctx.wrs_ais_type_code)
                     elif ctx.wrs_vessel_type:
                         rec.ais_typeAndCargo = ctx.wrs_vessel_type
                 if rec.ais_typeAndCargo is not None:

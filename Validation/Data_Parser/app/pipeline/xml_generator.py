@@ -1,139 +1,135 @@
-"""
-XML Generator constructing physical Raytheon Athena CTrack XTrack XML
-conforming strictly to downstream consumer requirements.
+"""Deterministic Athena XTrack XML generator.
 
-Builds:
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ns2:XTracks xmlns="http://www.raytheon.com/athena/ctrack/common/1.1" xmlns:ns2="http://www.raytheon.com/athena/ctrack/xtrack/1.1">
-    <ns2:XTrack verbose="true">
-        <ns2:A><id>sys.source.id</id><iv>38</iv></ns2:A>
-        <ns2:A><id>kinematic.pos.lla.lat</id><qv u="rad">0.7524233669513108</qv></ns2:A>
-        ...
-    </ns2:XTrack>
-</ns2:XTracks>
+Operational contract:
+- generate_document() produces one XML document containing exactly one XTrack.
+- The 41 canonical fields are emitted in deterministic master order.
+- Missing values are omitted; no filler is fabricated merely to reach 41.
 """
+from __future__ import annotations
 
+import math
+import xml.etree.ElementTree as ET
 import xml.sax.saxutils as saxutils
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from .normalizer import NormalizedRecord
+from .normalizer import LOGICAL_FIELDS_41, NormalizedRecord
 from .source_registry import iso_to_epoch_ms, sanitize_string
 
+NS_COMMON = "http://www.raytheon.com/athena/ctrack/common/1.1"
+NS_XTRACK = "http://www.raytheon.com/athena/ctrack/xtrack/1.1"
 
-# Field definitions: (id_name, element_tag, unit_attribute)
-FIELD_SPECS = {
-    # Integers
-    "sys.source.id":         ("iv", None),
-    "sys.track.number":      ("iv", None),
-    "id.mmsi":               ("iv", None),
-    "id.imo":                ("iv", None),
-    "id.mmsi.destination":   ("iv", None),
-    "track.quality":         ("iv", None),
-
-    # Booleans
-    "track.flag.active":     ("bv", None),
-    "kinematic.flag.3d":     ("bv", None),
-
-    # Quantities
-    "kinematic.pos.lla.lat":  ("qv", "rad"),
-    "kinematic.pos.lla.lon":  ("qv", "rad"),
-    "kinematic.course.true":  ("qv", "rad"),
-    "kinematic.heading.true": ("qv", "rad"),
-    "kinematic.speed":        ("qv", "m/s"),
-    "kinematic.pos.lla.alt":  ("qv", "m"),
-    "vessel.length":          ("qv", "m"),
-    "vessel.beam":            ("qv", "m"),
-    "vessel.draft":           ("qv", "m"),
-    "vessel.grosstonnage":    ("qv", "t"),
-    "ais.lenToBow":           ("qv", "m"),
-    "ais.lenToStern":         ("qv", "m"),
-    "ais.widthToPort":        ("qv", "m"),
-    "ais.widthToStarboard":   ("qv", "m"),
-    "kinematic.rot":          ("qv", "deg/min"),
-
-    # Timestamps
-    "timestamp.source":       ("tv", None),
-    "timestamp.receipt":      ("tv", None),
-    "voyage.eta":             ("tv", None),
-    "voyage.etd":             ("tv", None),
-
-    # Strings
-    "foreign.track.number":   ("sv", None),
-    "app.message.id":         ("sv", None),
-    "cat.category":           ("sv", None),
-    "cat.identity":           ("sv", None),
-    "cat.annotation":         ("sv", None),
-    "id.callsign":            ("sv", None),
-    "vessel.name":            ("sv", None),
-    "vessel.description":     ("sv", None),
-    "vessel.remarks":         ("sv", None),
-    "ais.navStatus":          ("sv", None),
-    "ais.typeAndCargo":       ("sv", None),
-    "voyage.arrival":         ("sv", None),
-    "voyage.departure":       ("sv", None),
-    "voyage.destination":     ("sv", None),
-    "voyage.origin":          ("sv", None),
+FIELD_SPECS: Dict[str, Tuple[str, Optional[str]]] = {
+    "ais.lenToBow": ("qv", "m"), "ais.lenToStern": ("qv", "m"),
+    "ais.navStatus": ("iv", None), "ais.typeAndCargo": ("sv", None),
+    "ais.widthToPort": ("qv", "m"), "ais.widthToStarboard": ("qv", "m"),
+    "app.message.id": ("iv", None), "cat.annotation": ("sv", None),
+    "cat.category": ("sv", None), "cat.identity": ("iv", None),
+    "foreign.track.number": ("iv", None), "id.callsign": ("sv", None),
+    "id.imo": ("iv", None), "id.mmsi": ("iv", None),
+    "id.mmsi.destination": ("iv", None), "kinematic.course.true": ("qv", "rad"),
+    "kinematic.flag.3d": ("bv", None), "kinematic.heading.true": ("qv", "rad"),
+    "kinematic.pos.lla.alt": ("qv", "m"), "kinematic.pos.lla.lat": ("qv", "rad"),
+    "kinematic.pos.lla.lon": ("qv", "rad"), "kinematic.speed": ("qv", "m/s"),
+    "sys.source.id": ("iv", None), "sys.track.number": ("iv", None),
+    "timestamp.receipt": ("tv", None), "timestamp.source": ("tv", None),
+    "track.flag.active": ("bv", None), "track.quality": ("iv", None),
+    "vessel.beam": ("qv", "m"), "vessel.description": ("sv", None),
+    "vessel.draft": ("qv", "m"), "vessel.grosstonnage": ("qv", "t"),
+    "vessel.length": ("qv", "m"), "vessel.name": ("sv", None),
+    "vessel.remarks": ("sv", None), "voyage.arrival": ("sv", None),
+    "voyage.departure": ("sv", None), "voyage.destination": ("sv", None),
+    "voyage.eta": ("tv", None), "voyage.etd": ("tv", None),
+    "voyage.origin": ("sv", None),
 }
+CANONICAL_ORDER = list(LOGICAL_FIELDS_41)
 
 
 class XTrackXMLGenerator:
-    """Constructs XTrack XML documents conforming to Raytheon CTrack schema."""
+    def __init__(self, emit_uncontracted_extras: bool = False):
+        self.emit_uncontracted_extras = bool(emit_uncontracted_extras)
 
-    NS_COMMON = "http://www.raytheon.com/athena/ctrack/common/1.1"
-    NS_XTRACK = "http://www.raytheon.com/athena/ctrack/xtrack/1.1"
+    @staticmethod
+    def _finite(value: Any) -> bool:
+        try:
+            return math.isfinite(float(value))
+        except (TypeError, ValueError):
+            return False
 
-    def __init__(self):
-        pass
+    @classmethod
+    def _format_value(cls, val_tag: str, value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        if val_tag == "bv":
+            return "true" if bool(value) else "false"
+        if val_tag == "tv":
+            epoch = iso_to_epoch_ms(value)
+            return str(epoch) if epoch is not None else None
+        if val_tag == "iv":
+            try:
+                return str(int(float(value)))
+            except (TypeError, ValueError, OverflowError):
+                return None
+        if val_tag == "qv":
+            return str(value) if cls._finite(value) else None
+        return saxutils.escape(sanitize_string(str(value)))
+
+    def generate_document(self, record: NormalizedRecord) -> str:
+        logical = record.to_logical_dict()
+        root = ET.Element(f"{{{NS_XTRACK}}}XTracks")
+        root.set("xmlns", NS_COMMON)
+        root.set("xmlns:ns2", NS_XTRACK)
+        xtrack = ET.SubElement(root, f"{{{NS_XTRACK}}}XTrack", {"verbose": "true"})
+
+        for field_id in CANONICAL_ORDER:
+            val_tag, unit = FIELD_SPECS[field_id]
+            value = logical.get(field_id)
+            text = self._format_value(val_tag, value)
+            if text is None:
+                continue
+            a = ET.SubElement(xtrack, f"{{{NS_XTRACK}}}A")
+            id_elem = ET.SubElement(a, "id")
+            id_elem.text = field_id
+            v = ET.SubElement(a, val_tag)
+            if unit:
+                v.set("u", unit)
+            v.text = text
+
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + ET.tostring(root, encoding="unicode")
 
     def generate_single_xml(self, record: NormalizedRecord) -> str:
-        """Generate XML string for a single normalized record."""
-        return self.generate_batch_xml([record])
+        return self.generate_document(record)
 
     def generate_batch_xml(self, records: List[NormalizedRecord]) -> str:
-        """Generate XML string containing multiple <ns2:XTrack> elements."""
-        lines: List[str] = [
-            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-            f'<ns2:XTracks xmlns="{self.NS_COMMON}" xmlns:ns2="{self.NS_XTRACK}">',
-        ]
+        records = list(records)
+        if len(records) == 1:
+            return self.generate_document(records[0])
+        root = ET.Element(f"{{{NS_XTRACK}}}XTracks")
+        root.set("xmlns", NS_COMMON)
+        root.set("xmlns:ns2", NS_XTRACK)
+        for record in records:
+            one_root = ET.fromstring(self.generate_document(record))
+            one_xtrack = next((n for n in one_root.iter() if n.tag.endswith("XTrack")), None)
+            if one_xtrack is not None:
+                root.append(one_xtrack)
+        return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + ET.tostring(root, encoding="unicode")
 
-        for rec in records:
-            lines.append('    <ns2:XTrack verbose="true">')
-
-            logical_dict = rec.to_logical_dict()
-
-            # Append kinematic.rot if available
-            if rec.kinematic_rot is not None:
-                logical_dict["kinematic.rot"] = rec.kinematic_rot
-
-            for field_id, (val_tag, unit) in FIELD_SPECS.items():
-                val = logical_dict.get(field_id)
-                if val is None:
-                    continue
-
-                # Format value string
-                if val_tag == "bv":
-                    val_str = "true" if val else "false"
-                elif val_tag == "tv":
-                    epoch_val = iso_to_epoch_ms(val)
-                    if epoch_val is not None:
-                        val_str = str(epoch_val)
-                    else:
-                        continue
-                elif val_tag == "iv":
-                    try:
-                        val_str = str(int(float(val)))
-                    except (ValueError, TypeError):
-                        continue
-                elif val_tag == "qv":
-                    val_str = str(val)
-                else:
-                    clean_str = sanitize_string(str(val))
-                    val_str = saxutils.escape(clean_str)
-
-                unit_attr = f' u="{unit}"' if unit else ""
-                lines.append(f'        <ns2:A><id>{field_id}</id><{val_tag}{unit_attr}>{val_str}</{val_tag}></ns2:A>')
-
-            lines.append('    </ns2:XTrack>')
-
-        lines.append('</ns2:XTracks>')
-        return "\n".join(lines)
+    @staticmethod
+    def validate_document(xml_text: str) -> int:
+        root = ET.fromstring(xml_text)
+        xtracks = [n for n in root.iter() if n.tag.endswith("XTrack")]
+        if len(xtracks) != 1:
+            raise ValueError(f"Expected exactly one XTrack, found {len(xtracks)}")
+        seen = set()
+        for a in xtracks[0]:
+            if not a.tag.endswith("A"):
+                continue
+            ids = [c for c in a if c.tag.split("}")[-1] == "id"]
+            if len(ids) != 1 or not (ids[0].text or "").strip():
+                raise ValueError("Invalid A element")
+            field_id = ids[0].text.strip()
+            if field_id not in LOGICAL_FIELDS_41:
+                raise ValueError(f"Unapproved field: {field_id}")
+            if field_id in seen:
+                raise ValueError(f"Duplicate field: {field_id}")
+            seen.add(field_id)
+        return len(seen)

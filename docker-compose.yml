@@ -47,6 +47,13 @@ services:
     ports:
       - "8082:8082"
 
+  pans-importer:
+    image: validation/parser:dev
+    restart: unless-stopped
+    command: ["python", "-m", "Validation.Database.PANS.importer.pans_importer", "--config", "/opt/validation/docker/database.yaml"]
+    volumes:
+      - ./runtime/reference:/opt/validation/runtime/reference
+
   web:
     image: validation/parser:dev
     restart: unless-stopped

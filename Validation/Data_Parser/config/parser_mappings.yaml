@@ -1,0 +1,68 @@
+# Parser mappings are operator-editable through the Web Console.
+# Candidate order is priority order. Supported sources:
+# incoming:<field>, ais_state:<field>, wrs:<field>, pans:<field>, nsc:<field>, default:<value>
+parsers:
+  SAIS:
+    format: text
+    fields:
+      id.mmsi: [incoming:mmsi]
+      id.imo: [incoming:imo, ais_state:imo]
+      id.callsign: [incoming:callsign, ais_state:callsign]
+      vessel.name: [incoming:vessel_name, ais_state:vessel_name]
+      ais.typeAndCargo: [incoming:vessel_type, ais_state:vessel_type]
+      vessel.length: [incoming:length, ais_state:length]
+      vessel.beam: [incoming:width, ais_state:width]
+      vessel.draft: [incoming:draught, ais_state:draught]
+      kinematic.pos.lla.lat: [incoming:latitude]
+      kinematic.pos.lla.lon: [incoming:longitude]
+      kinematic.speed: [incoming:sog]
+      kinematic.course.true: [incoming:cog]
+      kinematic.heading.true: [incoming:true_heading]
+      ais.navStatus: [incoming:nav_status, ais_state:nav_status]
+      voyage.destination: [incoming:destination, ais_state:destination]
+      voyage.eta: [incoming:eta, ais_state:eta]
+      app.message.id: [incoming:message_type]
+  MSIS:
+    format: csv
+    fields:
+      id.mmsi: [incoming:mmsi]
+      id.imo: [incoming:imo, ais_state:imo]
+      id.callsign: [incoming:callsign, ais_state:callsign]
+      vessel.name: [incoming:ship_name, ais_state:vessel_name]
+      ais.typeAndCargo: [incoming:type_and_cargo, ais_state:vessel_type]
+      vessel.length: [incoming:length, ais_state:length]
+      vessel.beam: [incoming:width, ais_state:width]
+      vessel.draft: [incoming:draught, ais_state:draught]
+      kinematic.pos.lla.lat: [incoming:latitude]
+      kinematic.pos.lla.lon: [incoming:longitude]
+      kinematic.speed: [incoming:sog]
+      kinematic.course.true: [incoming:cog]
+      kinematic.heading.true: [incoming:true_heading]
+      ais.navStatus: [incoming:navigation_status, incoming:navigatetion_status, ais_state:nav_status]
+      voyage.destination: [incoming:destination, ais_state:destination]
+      voyage.eta: [incoming:eta, ais_state:eta]
+  LRIT:
+    format: csv
+    fields:
+      id.mmsi: [incoming:mmsi]
+      id.imo: [incoming:imo, ais_state:imo]
+      id.callsign: [incoming:callsign, ais_state:callsign]
+      vessel.name: [incoming:vessel_name, ais_state:vessel_name]
+      kinematic.pos.lla.lat: [incoming:latitude]
+      kinematic.pos.lla.lon: [incoming:longitude]
+      kinematic.speed: [incoming:sog]
+      kinematic.course.true: [incoming:cog]
+      kinematic.heading.true: [incoming:heading]
+      ais.navStatus: [incoming:nav_status, ais_state:nav_status]
+      vessel.length: [incoming:length, ais_state:length]
+      vessel.beam: [incoming:width, ais_state:width]
+      vessel.draft: [incoming:draught, ais_state:draught]
+      ais.typeAndCargo: [incoming:vessel_type, ais_state:vessel_type]
+      voyage.destination: [incoming:destination, ais_state:destination]
+      voyage.eta: [incoming:eta, ais_state:eta]
+  VATMS:
+    format: text
+    fields: {}
+  NAIS:
+    format: text
+    fields: {}

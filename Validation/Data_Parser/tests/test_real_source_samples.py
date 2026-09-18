@@ -23,6 +23,7 @@ class TestRealSourceSamples(unittest.TestCase):
         result = SAISParser().parse(self.envelope("SAIS_IOR", line))
         self.assertEqual(result.records_parsed, 1)
         self.assertEqual(result.records[0].app_message_id, 1)
+        self.assertIsNotNone(result.records[0].latitude)
 
     def test_sais_multipart_physical_line_contract(self):
         first = r"\g:1-2-3032148,s:66,c:1782377418*06\!AIVDM,2,1,8,B,5714j:02<CB<7HG?3CML4@V04j0H4V222222220l0" + chr(96) + r"D545Ide:QUBPBD,0*74"

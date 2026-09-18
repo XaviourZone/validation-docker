@@ -5,13 +5,21 @@ from pathlib import Path
 from Validation.Data_Parser.app.models.common import ParserEnvelope, CommonVesselRecord
 from Validation.Data_Parser.app.pipeline.normalizer import normalize_from_common_record
 from Validation.Data_Parser.app.pipeline.xml_generator import FIELD_SPECS, XTrackXMLGenerator
-from Validation.Data_Parser.app.pipeline.normalizer import LOGICAL_FIELDS_41
+from Validation.Data_Parser.app.pipeline.normalizer import LOGICAL_FIELDS_41, normalize_nav_status, normalize_type_and_cargo
 
 
 class TestXMLContract(unittest.TestCase):
     def test_41_field_spec_is_complete(self):
         self.assertEqual(len(LOGICAL_FIELDS_41), 41)
         self.assertEqual(set(LOGICAL_FIELDS_41), set(FIELD_SPECS))
+
+
+    def test_itracklib_ais_vocabulary(self):
+        self.assertEqual(normalize_nav_status(0), "UNDER WAY USING ENGINE")
+        self.assertEqual(normalize_nav_status(10), "RESERVED FOR FUTURE AMENDMENT OF NAVIGATIONAL STATUS FOR SHIPS CARRYING DG, HS OR MP, OR IMO HAZARD OR POLLUTANT CATEGORY A (WIG)")
+        self.assertEqual(normalize_type_and_cargo(1), "GPS")
+        self.assertEqual(normalize_type_and_cargo(70), "CARGO SHIP")
+        self.assertEqual(normalize_type_and_cargo(80), "TANKER")
 
     def test_one_record_one_xtrack_and_41_tag_membership(self):
         rec = CommonVesselRecord(

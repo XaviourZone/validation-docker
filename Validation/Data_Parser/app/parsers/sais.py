@@ -124,7 +124,7 @@ class SAISParser(BaseParser):
 
         record_time = tag_timestamp_iso or datetime.now(timezone.utc).isoformat()
         if not (nmea_sentence.startswith("!") or nmea_sentence.startswith("$")):
-            return None
+            raise ValueError("Malformed NMEA sentence: unsupported sentence prefix")
         if not _checksum_ok(nmea_sentence):
             raise ValueError("NMEA checksum validation failed")
 
@@ -189,7 +189,7 @@ class SAISParser(BaseParser):
         if fill_bits:
             bit_str = bit_str[:-fill_bits]
         if len(bit_str) < 38:
-            return None
+            raise ValueError("Malformed AIS payload: fewer than 38 decoded bits")
 
         msg_type = int(bit_str[0:6], 2)
         mmsi = int(bit_str[8:38], 2)

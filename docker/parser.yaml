@@ -1,0 +1,36 @@
+server:
+  http_host: "0.0.0.0"
+  http_port: 8081
+
+endpoints:
+  SAIS:
+    host: "0.0.0.0"
+    port: 10001
+    sources: ["SAIS_IOR", "SAIS_GLOBAL"]
+    framing: "ndjson"
+  MSIS:
+    host: "0.0.0.0"
+    port: 10002
+    sources: ["MSIS"]
+    framing: "ndjson"
+  LRIT:
+    host: "0.0.0.0"
+    port: 10003
+    sources: ["LRIT"]
+    framing: "ndjson"
+  VATMS:
+    host: "0.0.0.0"
+    port: 10004
+    sources: ["VATMS_EAST", "VATMS_WEST"]
+    framing: "ndjson"
+  NAIS:
+    host: "0.0.0.0"
+    port: 10005
+    sources: ["NAIS"]
+    framing: "ndjson"
+
+output:
+  xml_spool_dir: "Validation/Data_Forwarder/spool/pending"
+
+logging:
+  level: "INFO"

@@ -1,0 +1,4 @@
+# Validation Web Console Requirements
+# Offline-ready for Ubuntu and Windows.
+pyyaml>=6.0
+psutil>=6.0,<8

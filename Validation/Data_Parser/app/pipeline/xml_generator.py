@@ -20,11 +20,11 @@ NS_XTRACK = "http://www.raytheon.com/athena/ctrack/xtrack/1.1"
 
 FIELD_SPECS: Dict[str, Tuple[str, Optional[str]]] = {
     "ais.lenToBow": ("qv", "m"), "ais.lenToStern": ("qv", "m"),
-    "ais.navStatus": ("iv", None), "ais.typeAndCargo": ("sv", None),
+    "ais.navStatus": ("sv", None), "ais.typeAndCargo": ("sv", None),
     "ais.widthToPort": ("qv", "m"), "ais.widthToStarboard": ("qv", "m"),
-    "app.message.id": ("iv", None), "cat.annotation": ("sv", None),
-    "cat.category": ("sv", None), "cat.identity": ("iv", None),
-    "foreign.track.number": ("iv", None), "id.callsign": ("sv", None),
+    "app.message.id": ("sv", None), "cat.annotation": ("sv", None),
+    "cat.category": ("sv", None), "cat.identity": ("sv", None),
+    "foreign.track.number": ("sv", None), "id.callsign": ("sv", None),
     "id.imo": ("iv", None), "id.mmsi": ("iv", None),
     "id.mmsi.destination": ("iv", None), "kinematic.course.true": ("qv", "rad"),
     "kinematic.flag.3d": ("bv", None), "kinematic.heading.true": ("qv", "rad"),

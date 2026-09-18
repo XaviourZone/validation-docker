@@ -34,3 +34,4 @@ output:
 
 logging:
   level: "INFO"
+\nreference_databases:\n  wrs: runtime/reference/wrs.db\n  pans: runtime/reference/pans.db\n  nsc: runtime/reference/nsc.db\n

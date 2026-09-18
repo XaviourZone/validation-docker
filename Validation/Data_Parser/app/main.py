@@ -18,7 +18,8 @@ from .parsers.sais import SAISParser
 from .parsers.vatms import VATMSParser
 from .parsers.mapped import MappedParser
 from .pipeline.mapping_manager import ParserMappingManager
-from .pipeline.processor import PipelineProcessor\nfrom .pipeline.reference_db import ReferenceDB
+from .pipeline.processor import PipelineProcessor
+from .pipeline.reference_db import ReferenceDB
 from .server.api_server import ParserAPIServer
 from .server.endpoint import ParserEndpointServer
 

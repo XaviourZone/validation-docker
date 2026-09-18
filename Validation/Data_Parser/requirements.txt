@@ -1,0 +1,7 @@
+# Validation Data Parser Requirements
+# 100% offline air-gapped installation on Ubuntu / Windows
+# The parser engine uses standard library (socket, threading, json, csv, re, http.server)
+# and pure-Python bitwise AIS decoding (Zero external C extensions, zero online dependencies).
+# PyYAML is the only third-party package for loading YAML configurations.
+
+pyyaml>=6.0

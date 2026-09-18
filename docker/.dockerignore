@@ -1,0 +1,11 @@
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.db-shm
+*.db-wal
+runtime/
+*.log
+Data/
+Sample data/

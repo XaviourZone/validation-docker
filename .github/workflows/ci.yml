@@ -1,0 +1,28 @@
+name: Validation CI
+
+on:
+  push:
+    branches:
+      - dev/validation-full-build
+  pull_request:
+
+jobs:
+  syntax-and-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r Validation/Data_Parser/requirements.txt
+          python -m pip install -r Validation/Data_Router/requirements.txt
+          python -m pip install -r Validation/Data_Forwarder/requirements.txt
+          python -m pip install -r Validation/Web_Console/requirements.txt
+          python -m pip install -r Validation/Database/requirements.txt
+      - name: Compile Python
+        run: python -m compileall -q Validation
+      - name: XML contract tests
+        run: python -m unittest Validation.Data_Parser.tests.test_xml_contract

@@ -6,8 +6,6 @@ services:
     image: validation/parser:dev
     restart: unless-stopped
     command: ["python", "-m", "Validation.Data_Parser.app.main", "--config", "/opt/validation/docker/parser.yaml"]
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./runtime/data_inflow:/opt/validation/DATA_INFLOW
       - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
@@ -30,6 +28,8 @@ services:
     image: validation/parser:dev
     restart: unless-stopped
     command: ["python", "-m", "Validation.Data_Router.app.main", "--config", "/opt/validation/docker/sources.yaml"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       parser:
         condition: service_healthy
@@ -69,6 +69,8 @@ services:
       - ./runtime/router-state:/opt/validation/Validation/Data_Router/state
       - ./runtime/router-logs:/opt/validation/Validation/Data_Router/logs
       - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
-      - ./runtime/reference:/opt/validation/Validation/Database
+      - ./runtime/reference:/opt/validation/runtime/reference
+    environment:
+      VALIDATION_DATABASE_CONFIG: /opt/validation/docker/database.yaml
     ports:
       - "8088:8088"

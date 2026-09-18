@@ -21,7 +21,8 @@ class DatabaseClient:
         self.config_manager = config_manager
         
         # Load config
-        configured_db = os.environ.get("VALIDATION_DATABASE_CONFIG")\n        self.db_config_path = Path(configured_db) if configured_db else self.workspace_root / "Validation" / "Database" / "config" / "database.yaml"
+        configured_db = os.environ.get("VALIDATION_DATABASE_CONFIG")
+        self.db_config_path = Path(configured_db) if configured_db else self.workspace_root / "Validation" / "Database" / "config" / "database.yaml"
         self.config = self._load_config()
         
         self.wrs_path = self.workspace_root / self.config.get("database", {}).get("wrs", {}).get("path", "Validation/Database/WRS/wrs.db")

@@ -33,6 +33,9 @@ Development branch: dev/validation-full-build
 - CI compile, unit/source tests, Compose validation and Docker image build.
 
 ## Latest continuation work
+- Expanded the validation gate to include the complete parser validation pipeline and added `scripts/run_validation_gate.sh` as the single-command full acceptance entrypoint.
+- Reviewed the existing Router restart, fault-recovery, failure-scenario, TCP-routing, XML-contract, real-source and processor-spooling test coverage; these are now wired into the gate rather than being undocumented tests.
+
 - Data Router Web Console now has a server-side filesystem folder browser for FILE sources.
 - FILE source editing now provides selectable CSV/XML/JSON/TXT/NMEA/LOG/all-file patterns and persists the selected patterns to YAML.
 - Docker Compose now shares the live `docker/` configuration directory between Parser, Router, Forwarder and Web Console so UI edits target the same configuration files used by the services.

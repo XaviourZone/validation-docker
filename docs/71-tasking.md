@@ -86,7 +86,7 @@ Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed
 67. ☑ Build a common offline-capable Validation runtime image containing finalized services and dependencies.
 68. ☑ Add Compose definitions with persistent config/data/state/log volumes and healthchecks.
 69. ☑ Add offline image save/load and deployment scripts; do not require Internet at deployment time.
-70. ◐ Add complete source, unit, integration, XML, restart and Docker smoke-test entry points with measurable pass/fail output.
+70. ☑ Add complete source, unit, integration, XML, restart and Docker smoke-test entry points with measurable pass/fail output.
 71. ☐ Perform final end-to-end acceptance: source input → Router → Parser → normalization/validation/correlation/enrichment → XML → Forwarder, then freeze release only after all mandatory checks pass.
 
 ## Release gate

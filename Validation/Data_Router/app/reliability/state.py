@@ -5,7 +5,7 @@ import threading
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from ..utils.time import now_iso
 
@@ -200,6 +200,7 @@ class FileStateStore:
                         file_path = excluded.file_path,
                         file_size = excluded.file_size,
                         mtime = excluded.mtime,
+                        file_hash = excluded.file_hash,
                         message_id = excluded.message_id,
                         status = excluded.status
                     """,
@@ -254,7 +255,7 @@ class FileStateStore:
                         """,
                         (status.value, destination, message_id),
                     )
-                elif status in (FileState.RETRYING, FileState.FAILED):
+                elif status in (FileState.RETRYING, FileState.FAILED, FileState.DISCOVERED):
                     conn.execute(
                         """
                         UPDATE file_states

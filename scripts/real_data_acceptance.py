@@ -157,8 +157,11 @@ def run_source(processor: PipelineProcessor, source: str, paths: list[Path], out
         env = ParserEnvelope(
             source=source,
             message_id=path.name,
-            payload=payload,
+            input_type="FILE",
             received_at=datetime.now(timezone.utc).isoformat(),
+            payload=payload,
+            filename=path.name,
+            file_size=path.stat().st_size,
         )
         result, _ = processor.process_envelope(env)
         stats["files"] += 1

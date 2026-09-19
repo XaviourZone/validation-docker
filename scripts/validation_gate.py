@@ -46,6 +46,13 @@ def main() -> int:
                 "Validation.Data_Parser.tests.test_spoofing",
             ],
         ),
+        (
+            "Full pipeline acceptance",
+            [
+                python, "-m", "unittest",
+                "Validation.tests.test_full_pipeline_acceptance",
+            ],
+        ),
     ]
 
     if args.integration:

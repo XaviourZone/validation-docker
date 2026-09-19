@@ -59,6 +59,7 @@
     containerFieldsTcp: document.getElementById("container-fields-tcp"),
     srcFolder: document.getElementById("src-folder"),
     srcPatterns: document.getElementById("src-patterns"),
+    srcPatternsSelect: document.getElementById("src-patterns-select"),
     srcStability: document.getElementById("src-stability"),
     srcPoll: document.getElementById("src-poll"),
     srcRemoteHost: document.getElementById("src-remote-host"),
@@ -757,6 +758,9 @@
     if (dom.srcParser) {
       dom.srcParser.addEventListener("change", () => onParserChange());
     }
+    if (dom.srcPatternsSelect) {
+      dom.srcPatternsSelect.addEventListener("change", () => syncPatternInputFromSelector());
+    }
     if (dom.btnModalValidate) {
       dom.btnModalValidate.addEventListener("click", () => validateSourceForm());
     }
@@ -838,6 +842,7 @@
     // Reset File fields
     if (dom.srcFolder) dom.srcFolder.value = "";
     if (dom.srcPatterns) dom.srcPatterns.value = "*.csv, *.txt, *";
+    syncPatternSelectorFromInput();
     if (dom.srcStability) dom.srcStability.value = "1.0";
     if (dom.srcPoll) dom.srcPoll.value = "1.0";
 
@@ -885,6 +890,7 @@
       if (dom.srcFolder) dom.srcFolder.value = cfg.folder || sourceName;
       const pats = cfg.file_patterns || ["*.csv", "*.txt", "*"];
       if (dom.srcPatterns) dom.srcPatterns.value = Array.isArray(pats) ? pats.join(", ") : pats;
+      syncPatternSelectorFromInput();
       if (dom.srcStability) dom.srcStability.value = cfg.stability_window_seconds || 1.0;
       if (dom.srcPoll) dom.srcPoll.value = cfg.poll_interval_seconds || 1.0;
     } else {
@@ -920,6 +926,21 @@
     if (dom.containerFieldsFile) dom.containerFieldsFile.style.display = isFile ? "block" : "none";
     if (dom.containerFieldsTcp) dom.containerFieldsTcp.style.display = isFile ? "none" : "block";
 
+    updateEffectivePreview();
+  }
+
+  function syncPatternSelectorFromInput() {
+    if (!dom.srcPatternsSelect || !dom.srcPatterns) return;
+    const selected = new Set(dom.srcPatterns.value.split(",").map(v => v.trim()).filter(Boolean));
+    Array.from(dom.srcPatternsSelect.options).forEach(opt => {
+      opt.selected = selected.has(opt.value);
+    });
+  }
+
+  function syncPatternInputFromSelector() {
+    if (!dom.srcPatternsSelect || !dom.srcPatterns) return;
+    const values = Array.from(dom.srcPatternsSelect.selectedOptions).map(opt => opt.value);
+    dom.srcPatterns.value = values.join(", ");
     updateEffectivePreview();
   }
 

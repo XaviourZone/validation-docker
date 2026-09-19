@@ -1,5 +1,7 @@
 # Validation Docker — 71 Tasking Implementation Matrix
 
+Development branch: dev/validation-full-build
+
 This is the implementation control document for the Docker-targeted Validation build. It decomposes the established project requirements into 71 executable engineering taskings. Status is updated only from repository evidence and test results.
 
 Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed

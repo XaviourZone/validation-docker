@@ -56,3 +56,8 @@ These are evidence inputs, not unimplemented software. No production enrichment 
 ## Release rule
 
 Do not create a release/version tag until the environment-dependent acceptance evidence above is captured. Once those checks pass, the branch can be frozen for release.
+
+
+## Real-data acceptance runner
+
+The repository now includes `scripts/real_data_acceptance.py`, which builds isolated WRS/PANS/NSC databases from a supplied data tree, runs the actual reference lookup and `PipelineProcessor` against SAIS_IOR, SAIS_GLOBAL, MSIS, LRIT, VATMS_EAST, VATMS_WEST and NAIS, and produces XML field coverage plus throughput/rejection measurements. See `docs/real-data-acceptance.md`. This keeps operational data out of Git while making the final acceptance reproducible.

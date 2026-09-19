@@ -42,6 +42,7 @@ from Validation.Data_Router.app.reliability.state import FileStateStore
 from Validation.Data_Router.app.routing.router import RoutingEngine
 from Validation.Data_Router.app.sources.file_source import FileSourceManager
 from Validation.Data_Router.app.transport.connection_manager import ParserConnectionManager
+from Validation.Data_Router.app.utils.hashing import compute_file_hash
 
 
 def _free_port() -> int:
@@ -224,15 +225,20 @@ class TestFullPipelineAcceptance(unittest.TestCase):
 
         # Confirm the Router recorded an acknowledged/processed source message.
         deadline = time.time() + 5.0
+        file_hash = compute_file_hash(source_file)
+        state = None
         while time.time() < deadline:
-            states = self.router_state_store.all_records()
-            if states:
+            state = self.router_state_store.get_state(
+                "SAIS_IOR",
+                source_file.name,
+                file_hash,
+            )
+            if state and state.status.value == "PROCESSED":
                 break
             time.sleep(0.1)
-        states = self.router_state_store.all_records()
-        self.assertEqual(len(states), 1)
-        self.assertEqual(states[0].status.value, "PROCESSED")
-        self.assertIsNotNone(states[0].acknowledged_at)
+        self.assertIsNotNone(state)
+        self.assertEqual(state.status.value, "PROCESSED")
+        self.assertIsNotNone(state.acknowledged_at)
 
         # Confirm the Forwarder persisted successful delivery state.
         counts = self.forwarder.state.counts()

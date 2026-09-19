@@ -170,7 +170,9 @@ def build_reference_dbs(sample_root: Path, work: Path) -> dict[str, Path]:
         "imports": {"pans": {
             "input_dir": str(sample_root / "PANS"),
             "poll_interval_seconds": 0.01,
-            "stability_seconds": 0.0}},
+            # is_file_stable() needs a positive interval; zero makes its
+            # monotonic deadline expire before the first stability check.
+            "stability_seconds": 0.25}},
         "logging": {"log_dir": str(work / "logs"), "level": "WARNING"},
     }
     PansLiveImporter(pans_cfg).start(once=True)

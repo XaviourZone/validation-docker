@@ -38,3 +38,8 @@ Development branch: dev/validation-full-build
 3. **Authoritative iTrackLib max-length audit:** exact maximum string lengths still require the authoritative iTrackLib source/contract; no maximum lengths are guessed.
 4. **Target-host deployment smoke test:** the repository-side Compose restart/recovery test has passed, but the target offline host should still run the stack once with its real mounted reference/data directories.
 5. Do not create a release/version tag until the environment-dependent evidence above is captured.
+
+
+## Real-data acceptance runner
+
+The repository now includes `scripts/real_data_acceptance.py`, which builds isolated WRS/PANS/NSC databases from a supplied data tree, runs the actual reference lookup and `PipelineProcessor` against SAIS_IOR, SAIS_GLOBAL, MSIS, LRIT, VATMS_EAST, VATMS_WEST and NAIS, and produces XML field coverage plus throughput/rejection measurements. See `docs/real-data-acceptance.md`. This keeps operational data out of Git while making the final acceptance reproducible.

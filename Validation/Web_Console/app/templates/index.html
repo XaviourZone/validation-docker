@@ -97,7 +97,7 @@
       <div class="form-group"><label><input type="checkbox" id="src-enabled" checked> Enabled</label></div>
       <div class="form-section-title">Feed Type</div><div class="segmented-toggle"><button type="button" class="segmented-toggle-btn active" id="btn-type-file">FILE</button><button type="button" class="segmented-toggle-btn" id="btn-type-tcp">TCP</button></div>
       <input type="hidden" id="src-is-new" value="true"><input type="hidden" id="src-type" value="file">
-      <div id="container-fields-file"><div class="form-row"><div class="form-group"><label class="form-label">Input Folder *</label><input id="src-folder" class="form-input"></div><div class="form-group"><label class="form-label">File Pattern *</label><input id="src-patterns" class="form-input" value="*.csv"></div></div></div>
+      <div id="container-fields-file"><div class="form-row"><div class="form-group"><label class="form-label">Input Folder *</label><div style="display:flex;gap:8px"><input id="src-folder" class="form-input" style="flex:1"><button type="button" class="btn btn-secondary" id="btn-browse-folder">Browse…</button></div></div><div class="form-group"><label class="form-label">File Pattern *</label><input id="src-patterns" class="form-input" value="*.csv"></div></div></div>
       <input type="hidden" id="src-stability" value="1"><input type="hidden" id="src-poll" value="1">
       <div id="container-fields-tcp" style="display:none"><div class="form-row"><div class="form-group"><label class="form-label">Host *</label><input id="src-remote-host" class="form-input"></div><div class="form-group"><label class="form-label">Port *</label><input id="src-remote-port" class="form-input" type="number"></div></div></div>
       <input type="hidden" id="src-framing" value="line"><input type="hidden" id="src-max-line" value="65536"><input type="hidden" id="src-recon-init" value="2"><input type="hidden" id="src-recon-max" value="60">
@@ -110,6 +110,22 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="folder-browser-modal">
+  <div class="modal-container" style="max-width:720px">
+    <div class="modal-header"><div class="modal-title">Select Input Folder</div><button class="modal-close-btn" id="folder-browser-close" type="button">✕</button></div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <button class="btn btn-secondary" id="folder-browser-parent" type="button">Up</button>
+        <code id="folder-browser-current" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Select a drive/root</code>
+      </div>
+      <div id="folder-browser-error" style="display:none;margin-bottom:10px;padding:8px;border:1px solid var(--accent-rose);color:var(--accent-rose)"></div>
+      <div id="folder-browser-list" style="max-height:360px;overflow:auto;border:1px solid var(--border-color);border-radius:6px;padding:4px"></div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:8px">Click a folder to select it. Double-click to open it.</div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" id="folder-browser-cancel" type="button">Cancel</button><button class="btn btn-primary" id="folder-browser-select" type="button">Use Folder</button></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-confirmation">
   <div class="modal-container" style="max-width:440px"><div class="modal-header"><div class="modal-title"><span id="confirm-title">Confirm</span></div><button class="modal-close-btn" id="btn-confirm-close">✕</button></div><div class="modal-body"><div id="confirm-message"></div><div id="confirm-subtext"></div></div><div class="modal-footer"><button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button><button class="btn btn-danger" id="btn-confirm-proceed">Confirm</button></div></div>
 </div>
@@ -117,5 +133,6 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="/static/js/console.js?v=20260918-r2"></script>
 <script src="/static/js/console_ui_loader.js?v=20260918-r2"></script>
+<script src="/static/js/folder_browser.js?v=20260919-r1"></script>
 </body>
 </html>

@@ -248,6 +248,17 @@ def run_source(processor: PipelineProcessor, source: str, paths: list[Path], out
         stats["records_parsed"] += result.records_parsed
         stats["records_rejected"] += result.records_rejected
         stats["successful_envelopes"] += int(result.success)
+        for error in result.errors:
+            if error.startswith("Source parser error:"):
+                stats["parser_error_count"] += 1
+            elif error.startswith("Normalization/validation error"):
+                stats["normalization_error_count"] += 1
+            elif error.startswith("Enrichment error"):
+                stats["enrichment_error_count"] += 1
+            elif error.startswith("XML generation/compatibility/spooling error"):
+                stats["xml_error_count"] += 1
+            else:
+                stats["other_error_count"] += 1
         stats["failed_envelopes"] += int(not result.success)
         if result.errors:
             stats.setdefault("error_samples", [])
@@ -314,6 +325,8 @@ def main() -> int:
     output.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="validation-acceptance-"))
     xml_dir = output / "xml"
+    if xml_dir.exists():
+        shutil.rmtree(xml_dir)
     xml_dir.mkdir(parents=True, exist_ok=True)
 
     logging.basicConfig(level=logging.WARNING)
@@ -379,6 +392,21 @@ def main() -> int:
                 f"| {source} | {value['files']} | {value['records_parsed']} | "
                 f"{value['records_rejected']} | {value['xml_generated']} | "
                 f"{value['records_per_second']} |"
+            )
+        lines += [
+            "",
+            "## Error classification",
+            "",
+            "| Source | Parser | Normalization | Enrichment | XML | Other |",
+            "|---|---:|---:|---:|---:|---:|",
+        ]
+        for source, value in source_results.items():
+            lines.append(
+                f"| {source} | {value.get('parser_error_count', 0)} | "
+                f"{value.get('normalization_error_count', 0)} | "
+                f"{value.get('enrichment_error_count', 0)} | "
+                f"{value.get('xml_error_count', 0)} | "
+                f"{value.get('other_error_count', 0)} |"
             )
         lines += [
             "",

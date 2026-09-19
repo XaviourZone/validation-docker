@@ -5,7 +5,6 @@ import logging
 import os
 from pathlib import Path
 import threading
-import time
 from typing import Dict, Optional, Set, Tuple
 
 from .base_source import BaseSource
@@ -15,7 +14,7 @@ from ..monitoring.metrics import MetricsCollector
 from ..queue.item import RoutingEnvelope
 from ..reliability.state import FileState, FileStateStore
 from ..routing.router import RoutingEngine
-from ..utils.filesystem import FileSnapshot, get_file_snapshot, is_file_stable
+from ..utils.filesystem import FileSnapshot, is_file_stable
 from ..utils.hashing import compute_file_hash, generate_file_message_id
 from ..utils.time import now_iso
 
@@ -38,7 +37,6 @@ class FileSourceManager(BaseSource):
         self.state_store = state_store
         self.metrics_collector = metrics_collector
 
-        # Resolve directory path
         raw_folder = Path(config.folder)
         if raw_folder.is_absolute():
             self.folder_path = raw_folder
@@ -49,7 +47,6 @@ class FileSourceManager(BaseSource):
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
-        # Tracking dictionary for file stability: file_path -> FileSnapshot
         self._stability_snapshots: Dict[Path, FileSnapshot] = {}
         self._in_flight_files: Set[Tuple[str, str]] = set()
 
@@ -64,9 +61,7 @@ class FileSourceManager(BaseSource):
         if self._running:
             return
 
-        # Ensure directory exists
         self.folder_path.mkdir(parents=True, exist_ok=True)
-
         self._running = True
         self._stop_event.clear()
         self._thread = threading.Thread(
@@ -76,9 +71,13 @@ class FileSourceManager(BaseSource):
         )
         self._thread.start()
         if self.metrics_collector:
-            self.metrics_collector.set_source_state(self.name, running=True, connected=self.is_connected())
+            self.metrics_collector.set_source_state(
+                self.name, running=True, connected=self.is_connected()
+            )
 
-        self.logger.info(f"File source '{self.name}' monitoring started on {self.folder_path.resolve()}")
+        self.logger.info(
+            f"File source '{self.name}' monitoring started on {self.folder_path.resolve()}"
+        )
 
     def stop(self) -> None:
         """Stop file monitoring gracefully."""
@@ -104,7 +103,9 @@ class FileSourceManager(BaseSource):
                 if self.is_connected():
                     self._scan_directory()
                 else:
-                    self.logger.warning(f"File source '{self.name}' directory is inaccessible: {self.folder_path}")
+                    self.logger.warning(
+                        f"File source '{self.name}' directory is inaccessible: {self.folder_path}"
+                    )
                     if self.metrics_collector:
                         self.metrics_collector.set_source_state(self.name, connected=False)
             except Exception as e:
@@ -112,7 +113,6 @@ class FileSourceManager(BaseSource):
                 if self.metrics_collector:
                     self.metrics_collector.record_error(self.name, str(e))
 
-            # Sleep poll_interval or wake on stop
             self._stop_event.wait(timeout=poll_interval)
 
     def _scan_directory(self) -> None:
@@ -133,14 +133,15 @@ class FileSourceManager(BaseSource):
                 path = Path(entry.path)
                 filename = entry.name
 
-                # Check pattern matches
-                if not any(fnmatch.fnmatch(filename, pat) for pat in self.file_config.file_patterns):
+                if not any(
+                    fnmatch.fnmatch(filename, pat)
+                    for pat in self.file_config.file_patterns
+                ):
                     continue
 
                 current_files.add(path)
                 self._process_candidate_file(path)
 
-        # Cleanup stability tracker for deleted files
         for tracked_path in list(self._stability_snapshots.keys()):
             if tracked_path not in current_files:
                 del self._stability_snapshots[tracked_path]
@@ -170,7 +171,6 @@ class FileSourceManager(BaseSource):
                     self.metrics_collector.record_discovered(self.name)
             return
 
-        # File is verified stable. Compute hash.
         try:
             file_size = curr_snapshot.size
             mtime = curr_snapshot.mtime
@@ -181,13 +181,15 @@ class FileSourceManager(BaseSource):
 
         file_key = (file_path.name, file_hash)
 
-        # In-memory deduplication check
         if file_key in self._in_flight_files:
             return
 
-        # Persistent database duplicate / in-flight protection check
-        if self.state_store and self.state_store.is_in_flight_or_processed(self.name, file_path.name, file_hash):
-            self._in_flight_files.add(file_key)
+        if (
+            self.state_store
+            and self.state_store.is_in_flight_or_processed(
+                self.name, file_path.name, file_hash
+            )
+        ):
             log_event(
                 self.logger,
                 logging.DEBUG,
@@ -200,62 +202,72 @@ class FileSourceManager(BaseSource):
 
         self._in_flight_files.add(file_key)
 
-        message_id = generate_file_message_id(
-            source=self.name,
-            filename=file_path.name,
-            file_size=file_size,
-            mtime=mtime,
-            file_hash=file_hash,
-        )
-
-        # Record discovered in SQLite state
-        if self.state_store:
-            self.state_store.record_discovered(
+        try:
+            message_id = generate_file_message_id(
                 source=self.name,
                 filename=file_path.name,
-                file_path=str(file_path.resolve()),
                 file_size=file_size,
                 mtime=mtime,
                 file_hash=file_hash,
-                message_id=message_id,
-                status=FileState.READY,
             )
 
-        # Read contents without modifying file
-        try:
-            content = self._read_file_content(file_path)
-        except Exception as e:
-            self.logger.error(f"Failed to read content of file {file_path}: {e}")
             if self.state_store:
-                self.state_store.update_status(message_id, FileState.FAILED, error=str(e))
-            return
+                self.state_store.record_discovered(
+                    source=self.name,
+                    filename=file_path.name,
+                    file_path=str(file_path.resolve()),
+                    file_size=file_size,
+                    mtime=mtime,
+                    file_hash=file_hash,
+                    message_id=message_id,
+                    status=FileState.READY,
+                )
 
-        # Construct envelope
-        envelope = RoutingEnvelope(
-            message_id=message_id,
-            source=self.name,
-            input_type="FILE",
-            received_at=now_iso(),
-            payload=content,
-            filename=file_path.name,
-            file_size=file_size,
-            file_hash=file_hash,
-        )
+            try:
+                content = self._read_file_content(file_path)
+            except Exception as e:
+                self.logger.error(f"Failed to read content of file {file_path}: {e}")
+                if self.state_store:
+                    self.state_store.update_status(
+                        message_id, FileState.DISCOVERED, error=str(e)
+                    )
+                return
 
-        if self.metrics_collector:
-            self.metrics_collector.record_received(self.name)
-
-        # Submit to routing engine
-        routed = self.routing_engine.route(envelope)
-        if not routed:
-            log_event(
-                self.logger,
-                logging.WARNING,
-                event="file_route_congested",
-                source=self.name,
-                filename=file_path.name,
+            envelope = RoutingEnvelope(
                 message_id=message_id,
+                source=self.name,
+                input_type="FILE",
+                received_at=now_iso(),
+                payload=content,
+                filename=file_path.name,
+                file_size=file_size,
+                file_hash=file_hash,
             )
+
+            if self.metrics_collector:
+                self.metrics_collector.record_received(self.name)
+
+            routed = self.routing_engine.route(envelope)
+            if not routed:
+                if self.state_store:
+                    self.state_store.update_status(
+                        message_id,
+                        FileState.DISCOVERED,
+                        error="Router queue rejected or no route available",
+                    )
+                log_event(
+                    self.logger,
+                    logging.WARNING,
+                    event="file_route_congested",
+                    source=self.name,
+                    filename=file_path.name,
+                    message_id=message_id,
+                )
+        finally:
+            # Persistent SQLite state is the authoritative lifetime record.
+            # This in-memory set only prevents concurrent duplicate submission
+            # during the current scan operation and must always be released.
+            self._in_flight_files.discard(file_key)
 
     def _read_file_content(self, file_path: Path) -> str:
         """Safely read text file content, falling back to latin-1 if invalid utf-8."""

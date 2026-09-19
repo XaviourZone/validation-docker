@@ -6,6 +6,7 @@ vigilance scoring boundaries, active flag evaluation, and dimension integrity.
 """
 
 import math
+import sqlite3
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -45,6 +46,28 @@ class TestSemanticAudit(unittest.TestCase):
 
         cls.temp_dir = tempfile.mkdtemp(prefix="val_audit_test_")
         cls.state_db_path = Path(cls.temp_dir) / "audit_track_state.db"
+
+        # The repository intentionally does not carry operational reference DBs.
+        # Build a minimal deterministic NSC fixture only when the operational DB
+        # is absent, so the enrichment tests remain runnable from a clean clone.
+        if not cls.nsc_path.exists():
+            cls.nsc_path = Path(cls.temp_dir) / "nsc.db"
+            conn = sqlite3.connect(cls.nsc_path)
+            try:
+                conn.execute(
+                    "CREATE TABLE nsc_vessels ("
+                    "ID_MMSI TEXT, ID_IMO TEXT, ID_CALLSIGN TEXT, "
+                    "VESSEL_NAME TEXT, TYPE TEXT)"
+                )
+                conn.execute(
+                    "INSERT INTO nsc_vessels "
+                    "(ID_MMSI, ID_IMO, ID_CALLSIGN, VESSEL_NAME, TYPE) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    ("419697000", "8407979", "SAGA", "SAGA", "VESSEL"),
+                )
+                conn.commit()
+            finally:
+                conn.close()
 
         cls.ref_db = ReferenceDB(
             wrs_path=cls.wrs_path,
@@ -174,8 +197,8 @@ class TestSemanticAudit(unittest.TestCase):
     # 17. actual AIS message type preserved
     def test_17_actual_ais_message_type(self):
         p = SAISParser()
-        # Message Type 1 sentence
-        line = "!AIVDM,1,1,,A,13aEO:001m000000000000000000,0*0B"
+        # Message Type 1 sentence with a valid NMEA checksum.
+        line = "!AIVDM,1,1,,A,13aEO:001m000000000000000000,0*29"
         env = ParserEnvelope(message_id="msg17", source="SAIS_IOR", input_type="STREAM", received_at="2026-09-10T14:57:13Z", payload=line)
         res = p.parse(env)
         self.assertEqual(res.records[0].app_message_id, 1)

@@ -7,10 +7,10 @@ Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed
 ## A. Baseline and architecture
 1. ☑ Freeze the 41-tag XML master list and treat it as the canonical logical-field contract.
 2. ☑ Audit every canonical XML tag against the actual iTrackLib parser implementation.
-3. ◐ Record downstream type, unit, scale, conversion and setter behavior for every supported tag.
+3. ☑ Record downstream type, unit, scale, conversion and setter behavior for every supported tag.
 4. ☑ Separate facts, observations, proposals and assumptions in the mapping documentation.
-5. ◐ Preserve raw, decoded, normalized, validated, correlated, enriched, fused and XML stages as distinct processing states.
-6. ◐ Preserve source provenance end-to-end, including SAIS_IOR vs SAIS_GLOBAL and VATMS East vs West.
+5. ☑ Preserve raw, decoded, normalized, validated, correlated, enriched, fused and XML stages as distinct processing states.
+6. ☑ Preserve source provenance end-to-end, including SAIS_IOR vs SAIS_GLOBAL and VATMS East vs West.
 7. ☑ Keep the Router transport-only; no decoding, enrichment or XML generation in Router.
 8. ☑ Keep source-specific parsing isolated behind the common parser boundary.
 9. ☑ Keep database/reference access behind a single reference abstraction.
@@ -21,7 +21,7 @@ Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed
 12. ☑ Audit SAIS_GLOBAL sample format and parser behavior.
 13. ☑ Audit SAIS IEC 61162 Tag Block timestamp extraction and NMEA checksum handling.
 14. ☑ Audit AIS message types 1–27 and preserve supported raw message types without silent discard.
-15. ◐ Design multipart AIS handling so every physical input line has deterministic processing semantics without fabricated vessel values.
+15. ☑ Design multipart AIS handling so every physical input line has deterministic processing semantics without fabricated vessel values.
 16. ☑ Audit MSIS real CSV header/column mapping and one-row-per-record behavior.
 17. ☑ Audit LRIT real 20-column headerless CSV mapping.
 18. ☑ Audit LRIT empty/zero-byte file behavior.
@@ -30,7 +30,7 @@ Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed
 21. ☑ Audit NAIS !ABVDM/!ABVDO handling and $ABVSI treatment.
 22. ☑ Preserve malformed-line rejection reasons and source/message/line context.
 23. ☑ Make parser success/ACK semantics tolerate partial records while still reporting rejected records.
-24. ◐ Verify no parser silently drops a non-empty input record without a reason.
+24. ☑ Verify no parser silently drops a non-empty input record without a reason.
 
 ## C. 41-field normalization
 25. ☑ Build one canonical NormalizedRecord representation for all 41 fields.
@@ -71,7 +71,7 @@ Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed
 56. ☑ Enforce XML-safe string escaping and sanitation.
 57. ☑ Validate every XML document as well-formed XML with exactly one XTrack.
 58. ☑ Round-trip every generated XML through a local downstream compatibility parser.
-59. ◐ Compare compatibility behavior against the authoritative iTrackLib source audit.
+59. ☑ Compare compatibility behavior against the authoritative iTrackLib source audit.
 60. ☑ Produce a per-record field coverage report showing present/absent canonical tags.
 
 ## F. Router, state, reliability and Forwarder

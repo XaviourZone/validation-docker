@@ -17,13 +17,6 @@ production reference/input directories.
 
 from __future__ import annotations
 
-# Allow this script to be executed directly as:
-#   python3 scripts/real_data_acceptance.py ...
-# without requiring PYTHONPATH to be set by the caller.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 import argparse
 import csv
 import json
@@ -39,6 +32,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 import xml.etree.ElementTree as ET
+
+# Allow this script to be executed directly as:
+#   python3 scripts/real_data_acceptance.py ...
+# without requiring PYTHONPATH to be set by the caller.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from Validation.Data_Parser.app.models.common import ParserEnvelope
 from Validation.Data_Parser.app.pipeline.processor import PipelineProcessor

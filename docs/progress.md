@@ -32,6 +32,15 @@ Development branch: dev/validation-full-build
 - Offline image export/load scripts.
 - CI compile, unit/source tests, Compose validation and Docker image build.
 
+## Latest continuation work
+- Data Router Web Console now has a server-side filesystem folder browser for FILE sources.
+- FILE source editing now provides selectable CSV/XML/JSON/TXT/NMEA/LOG/all-file patterns and persists the selected patterns to YAML.
+- Docker Compose now shares the live `docker/` configuration directory between Parser, Router, Forwarder and Web Console so UI edits target the same configuration files used by the services.
+- Web Console Docker configuration now points directly at the shared `/opt/validation/docker/sources.yaml`.
+- Fixed malformed escaped-newline YAML in the Docker parser reference-database section.
+- Added `scripts/validation_gate.py` for measurable compile, parser-contract, semantic, spoofing, Router integration/recovery and optional Docker gate execution.
+- Added Router configuration-manager coverage for absolute production folders and file-type patterns.
+
 ## Still open before release
 1. Full iTrackLib 41-field setter/type/unit/max-length audit must be completed and committed as the authoritative matrix.
 2. Field-by-field PANS/NSC/WRS enrichment must be validated against representative real reference rows.

@@ -48,6 +48,27 @@ def main() -> int:
             ],
         ),
         (
+            "Reference DB importer tests",
+            [
+                python, "-m", "unittest",
+                "Validation.Database.tests.test_importers",
+            ],
+        ),
+        (
+            "Web Console configuration tests",
+            [
+                python, "-m", "unittest",
+                "Validation.Web_Console.tests.test_router_config_manager",
+            ],
+        ),
+        (
+            "XML field coverage tests",
+            [
+                python, "-m", "unittest",
+                "Validation.tests.test_xml_field_coverage",
+            ],
+        ),
+        (
             "Full pipeline acceptance",
             [
                 python, "-m", "unittest",
@@ -75,7 +96,13 @@ def main() -> int:
             ("Docker Compose syntax", ["docker", "compose", "config", "--quiet"]),
             ("Docker image build", ["docker", "build", "-f", "docker/Dockerfile", "-t", "validation/parser:gate", "."]),
             ("Offline image save/load", [python, "scripts/test_offline_image_roundtrip.py", "validation/parser:gate"]),
+            ("Docker stack restart/recovery", [python, "scripts/test_docker_stack_restart.py"]),
         ])
+
+    steps.append((
+        "Release documentation consistency",
+        [python, "scripts/release_consistency.py"],
+    ))
 
     results = [run_step(name, command) for name, command in steps]
     passed = sum(results)

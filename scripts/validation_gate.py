@@ -65,6 +65,7 @@ def main() -> int:
                 "Validation.Data_Router.tests.integration.test_restart_semantics",
                 "Validation.Data_Router.tests.integration.test_fault_recovery",
                 "Validation.Data_Router.tests.integration.test_failure_scenarios",
+                "Validation.Data_Router.tests.integration.test_file_source_state_lifecycle",
             ],
         ))
 

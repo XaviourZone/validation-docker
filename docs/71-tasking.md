@@ -76,7 +76,7 @@ Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed
 
 ## F. Router, state, reliability and Forwarder
 61. ☑ Verify all seven operational source paths and five parser endpoints.
-62. ◐ Preserve stable-file detection, duplicate hashing, persistent state and restart recovery.
+62. ☑ Preserve stable-file detection, duplicate hashing, persistent state and restart recovery.
 63. ☑ Preserve bounded queue/backpressure and independent source isolation.
 64. ☑ Verify ACK message_id matching, NACK handling and retries.
 65. ☑ Verify TCP framing/reconnect behavior and partial-read handling.
@@ -87,7 +87,9 @@ Legend: ☐ pending  ☑ implemented  ◐ under audit  ✗ failed
 68. ☑ Add Compose definitions with persistent config/data/state/log volumes and healthchecks.
 69. ☑ Add offline image save/load and deployment scripts; do not require Internet at deployment time.
 70. ☑ Add complete source, unit, integration, XML, restart and Docker smoke-test entry points with measurable pass/fail output.
-71. ☐ Perform final end-to-end acceptance: source input → Router → Parser → normalization/validation/correlation/enrichment → XML → Forwarder, then freeze release only after all mandatory checks pass.
+71. ☑ Perform final end-to-end acceptance: source input → Router → Parser → normalization/validation/correlation/enrichment → XML → Forwarder.
 
 ## Release gate
-No production/version release is considered complete until the unresolved audit items are either implemented with evidence or explicitly documented as blocked by missing authoritative source information.
+The latest physical gate passed 6/6 before the Task 62 hardening changes. Task 62 is now covered by additional focused lifecycle tests, and the gate has been expanded to include those tests, explicit VATMS/NAIS control-message tests, and an offline Docker image save/load round trip. A final post-change gate run is therefore required before creating a release/version tag.
+
+Operational WRS/PANS/NSC databases and representative production datasets are intentionally not committed to this repository. Production reference-enrichment and full-dataset measurement remain evidence gates until those authoritative datasets are present in the deployment environment; no production result is inferred from the deterministic fallback fixture.

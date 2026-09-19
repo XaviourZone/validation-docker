@@ -44,6 +44,7 @@ def main() -> int:
                 "Validation.Data_Parser.tests.test_processor_spooling",
                 "Validation.Data_Parser.tests.test_semantic_audit",
                 "Validation.Data_Parser.tests.test_spoofing",
+                "Validation.Data_Parser.tests.test_control_message_semantics",
             ],
         ),
         (

@@ -222,7 +222,8 @@ class VesselEnricher:
         if effective_vigilance is not None:
             rec.id_mmsi_destination = int(effective_vigilance)
             score = float(effective_vigilance)
-            rec.cat_identity = "Friend" if score < 300 else ("Suspect" if score > 600 else "Neutral")
+            # iTrackLib contract uses numeric identity categories: Friend=1, Neutral=3, Suspect=4.
+            rec.cat_identity = 1 if score < 300 else (4 if score > 600 else 3)
 
         # Voyage fields exist in PANS and WRS; NSC has no voyage columns.
         # Preserve incoming AIS first, then use the selected MMSI reference

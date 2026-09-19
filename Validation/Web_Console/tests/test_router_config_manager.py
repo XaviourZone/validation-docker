@@ -120,6 +120,24 @@ class TestRouterConfigManager(unittest.TestCase):
         self.assertEqual(sources["SAIS_NORTH"]["folder"], "SAIS_NORTH")
         self.assertEqual(sources["SAIS_NORTH"]["poll_interval_seconds"], 0.5)
 
+    def test_03_absolute_folder_and_file_type_patterns_are_persisted(self):
+        absolute_folder = str((self.workspace_root / "production_inflow").resolve())
+        payload = {
+            "source_name": "SAIS_PRODUCTION",
+            "type": "file",
+            "parser": "SAIS",
+            "enabled": True,
+            "folder": absolute_folder,
+            "file_patterns": ["*.csv", "*.nmea"],
+        }
+        is_valid, errors, _ = self.mgr.validate_source_payload(payload, is_new=True)
+        self.assertTrue(is_valid, f"Errors: {errors}")
+        success, _, _ = self.mgr.save_source(payload, is_new=True)
+        self.assertTrue(success)
+        saved = self.mgr.get_sources()["SAIS_PRODUCTION"]
+        self.assertEqual(saved["folder"], absolute_folder)
+        self.assertEqual(saved["file_patterns"], ["*.csv", "*.nmea"])
+
     def test_03_add_tcp_source_valid(self):
         payload = {
             "source_name": "VATMS_NORTH",

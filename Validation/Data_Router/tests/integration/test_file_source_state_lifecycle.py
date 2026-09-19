@@ -92,7 +92,7 @@ class TestFileSourceStateLifecycle(unittest.TestCase):
         router = RecordingRouter()
         source = self.make_source(router)
         path = self.folder / "stable.csv"
-        path.write_text("mmsi,lat,lon\\n419000122,13.1,80.3\\n", encoding="utf-8")
+        path.write_text("mmsi,lat,lon\n419000122,13.1,80.3\n", encoding="utf-8")
 
         source._process_candidate_file(path)
         self.assertEqual(len(router.envelopes), 0)
@@ -106,36 +106,39 @@ class TestFileSourceStateLifecycle(unittest.TestCase):
         router = RecordingRouter(accepted=True)
         source = self.make_source(router)
         path = self.folder / "duplicate.csv"
-        path.write_text("same content\\n", encoding="utf-8")
+        path.write_text("same content\n", encoding="utf-8")
 
         self.stabilize(source, path)
         self.assertEqual(len(router.envelopes), 1)
 
-        # A later scan must consult persistent state and not submit the same
-        # source + filename + content hash again.
         time.sleep(0.13)
         source._process_candidate_file(path)
         self.assertEqual(len(router.envelopes), 1)
 
-        state = self.store.get_state("SAIS_IOR", "duplicate.csv", router.envelopes[0].file_hash)
+        state = self.store.get_state(
+            "SAIS_IOR", "duplicate.csv", router.envelopes[0].file_hash
+        )
         self.assertIsNotNone(state)
-        self.assertEqual(state.status, FileState.QUEUED)
+        # The real RoutingEngine advances READY -> QUEUED. This focused test
+        # supplies only the source boundary, so READY proves the persistent
+        # record itself blocks the second submission.
+        self.assertEqual(state.status, FileState.READY)
 
     def test_in_memory_guard_is_released_after_queue_rejection(self):
         router = RecordingRouter(accepted=False)
         source = self.make_source(router)
         path = self.folder / "rejected.csv"
-        path.write_text("retry me\\n", encoding="utf-8")
+        path.write_text("retry me\n", encoding="utf-8")
 
         self.stabilize(source, path)
         self.assertEqual(len(router.envelopes), 1)
 
-        state = self.store.get_state("SAIS_IOR", "rejected.csv", router.envelopes[0].file_hash)
+        state = self.store.get_state(
+            "SAIS_IOR", "rejected.csv", router.envelopes[0].file_hash
+        )
         self.assertIsNotNone(state)
         self.assertEqual(state.status, FileState.DISCOVERED)
 
-        # The next stable scan must be allowed to try again; the in-memory
-        # guard must not permanently suppress the file.
         time.sleep(0.13)
         source._process_candidate_file(path)
         self.assertEqual(len(router.envelopes), 2)

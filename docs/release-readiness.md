@@ -22,64 +22,37 @@ The implementation has reached the repository-complete stage. The latest pre-har
 - Explicit VATMS/NAIS control-message tests.
 - Focused Task 62 file-source lifecycle tests.
 
-## Acceptance evidence already captured
+## Acceptance evidence
 
-The latest pre-hardening gate recorded:
+The latest post-hardening gate passed **12/12** in GitHub Actions run **94**, job **105874005822**.
 
-    VALIDATION GATE: 6/6 steps passed
+The passing gate covered:
 
-The full pipeline acceptance covered:
+- reference DB importer tests for WRS/PANS/NSC
+- lookup/fallback semantic tests
+- real-source parser test structure
+- Web Console configuration tests
+- Router → Parser → Forwarder end-to-end acceptance
+- Router lifecycle/recovery tests
+- XML field-coverage tests
+- Docker Compose syntax and image build
+- offline image save/load
+- deployed Compose Parser/Router/Forwarder/Web restart/recovery
+- release-document consistency
 
-    SAIS_IOR file
-      -> Router
-      -> real Parser TCP endpoint
-      -> parsing/normalization/validation/correlation/enrichment pipeline
-      -> XML
-      -> Forwarder pending spool
-      -> filesystem delivery
+The deployed Compose restart/recovery test physically started the service stack, verified Parser /health, Router /status, Forwarder /health and Web availability, restarted all four services, verified recovery again, and cleaned up.
 
-Router integration/recovery covered:
+## Remaining environment-dependent acceptance
 
-- stable file detection
-- duplicate suppression
-- persistent state
-- restart semantics
-- downstream retry
-- TCP reconnect
+The repository-side implementation and automated gate are complete, but the following still require authoritative deployment material:
 
-## Final post-change gate
+1. Real WRS/PANS/NSC operational databases and representative rows.
+2. Real production SAIS_IOR, SAIS_GLOBAL, MSIS, LRIT, VATMS and NAIS datasets for measured coverage.
+3. Authoritative iTrackLib source/contract for exact maximum string lengths.
+4. One target-host offline deployment smoke test using the actual mounted reference/data directories.
 
-Run from the repository root on the prepared Ubuntu/offline host:
-
-    ./scripts/run_validation_gate.sh
-
-If the shell wrapper is not executable in the checkout:
-
-    chmod +x scripts/run_validation_gate.sh
-    ./scripts/run_validation_gate.sh
-
-The Docker portion now additionally validates:
-
-- Compose syntax
-- image build
-- Docker image save
-- Docker image load
-
-## Evidence that cannot be fabricated in a clean repository
-
-The following require authoritative operational material that is intentionally not committed:
-
-1. Real WRS/PANS/NSC databases and representative rows.
-2. Real production SAIS_IOR, SAIS_GLOBAL, MSIS, LRIT, VATMS and NAIS datasets.
-3. The authoritative iTrackLib source/contract required to establish exact maximum string lengths.
-4. A complete deployed-Compose restart/recovery exercise on the target host.
-
-These are environment-dependent acceptance inputs, not missing software architecture.
-
-No production enrichment result, production record count, or maximum-length value is inferred without the authoritative source.
+These are evidence inputs, not unimplemented software. No production enrichment result, production record count, or maximum-length value is inferred without the authoritative source.
 
 ## Release rule
 
-Do not create a release/version tag until the post-change gate and the environment-dependent acceptance evidence above are captured.
-
-Once those checks pass, the branch is ready for release freezing.
+Do not create a release/version tag until the environment-dependent acceptance evidence above is captured. Once those checks pass, the branch can be frozen for release.

@@ -88,6 +88,26 @@ class TestReferenceImporters(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_pans_xml_merges_case_variant_tags(self):
+        xml_path = self.root / "case_variant.xml"
+        xml_path.write_text(
+            "<VesselCallNumber><DocumentDetails><VoyageDetails>"
+            "<PortCode>INBOM1</PortCode><Portcode>INBOM1</Portcode>"
+            "</VoyageDetails></DocumentDetails></VesselCallNumber>",
+            encoding="utf-8",
+        )
+
+        conn, batch_id = self._db("pans_case_variant")
+        try:
+            ok = process_xml_file(conn, xml_path, batch_id)
+            self.assertTrue(ok)
+            row = conn.execute(
+                "SELECT PortCode FROM pans_calinv"
+            ).fetchone()
+            self.assertEqual(row[0], "INBOM1; INBOM1")
+        finally:
+            conn.close()
+
     def test_nsc_csv_unifies_region_and_columns(self):
         csv_path = self.root / "NSC_EAST.csv"
         with csv_path.open("w", newline="", encoding="utf-8") as handle:

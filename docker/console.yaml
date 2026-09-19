@@ -3,7 +3,7 @@ server:
   port: 8088
 router:
   api_url: "http://router:8080"
-  config_path: "Validation/Data_Router/config/sources.yaml"
+  config_path: "/opt/validation/docker/sources.yaml"
   log_path: "Validation/Data_Router/logs/router.log"
   state_db_path: "Validation/Data_Router/state/router_state.db"
 parser:

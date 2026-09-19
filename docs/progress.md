@@ -2,54 +2,63 @@
 
 Development branch: dev/validation-full-build
 
-## Verified by CI
-- Python 3.14 compile of the full Validation tree passes.
-- Canonical 41-field specification count is exactly 41.
-- XML FIELD_SPECS count is exactly 41 and matches the canonical list.
-- XML contract test passes.
-- Real-format SAIS, MSIS, LRIT, VATMS East, VATMS West and NAIS parser contract tests pass.
-- Processor one-record/one-XML spooling test is included.
-- Docker Compose syntax validation passes.
-- Docker image build passes.
+## Verified evidence
+
+- The latest pre-hardening physical validation gate passed **6/6**:
+  - Python compile
+  - Parser contract/source/semantic/spoofing tests
+  - Full pipeline acceptance
+  - Router integration/recovery
+  - Docker Compose syntax
+  - Docker image build
+- The full pipeline acceptance physically exercised SAIS_IOR file input → Router → real Parser endpoint → parser pipeline → XML → Forwarder pending spool → filesystem delivery.
+- The Router restart/recovery integration suite physically covered duplicate suppression, interrupted delivery recovery, downstream retry and TCP reconnect behavior.
+- Docker Compose syntax and the common runtime image build pass.
+- Operational WRS/PANS/NSC databases are absent from the clean repository; semantic testing uses a deterministic NSC fallback fixture where required. This verifies pipeline mechanics, not production reference-data coverage.
 
 ## Implemented in this branch
+
 - One operational XML document per normalized source record.
 - Exactly one XTrack per operational XML document.
 - Deterministic canonical 41-field emission.
 - XML validation before Forwarder spooling.
 - Local downstream compatibility parsing before spool.
-- Physical-line-aware AIS multipart handling: incomplete fragments emit only available identity facts; final fragment emits the complete assembled decode.
+- Physical-line-aware AIS multipart handling.
 - Explicit malformed SAIS rejection reasons.
 - TMVTD checksum validation.
-- AIS navigation status normalization to the textual iTrackLib vocabulary.
-- AIS vessel-type normalization to the textual iTrackLib vocabulary.
-- Vigilance-to-identity mapping uses Friend / Neutral / Suspect textual values.
+- AIS navigation-status and vessel-type normalization to the established iTrackLib vocabulary.
+- Vigilance-to-identity mapping with the established boundary values.
 - Missing vessel names are not filled with fabricated UNKNOWN values.
 - Parser reference database paths are configurable for Docker.
 - Docker-safe Web Console service controller.
 - Persistent Docker runtime reference DB paths.
 - Continuous PANS importer in Compose.
-- Offline image export/load scripts.
-- CI compile, unit/source tests, Compose validation and Docker image build.
+- Data Router Web Console server-side filesystem folder browser.
+- FILE source CSV/XML/JSON/TXT/NMEA/LOG/all-file pattern selection persisted to YAML.
+- Shared live Docker configuration volume between Parser, Router, Forwarder and Web Console.
+- Measurable validation gate and single-command gate runner.
+- Router stable-file detection, content hashing, persistent state and restart recovery.
+- Additional Task 62 focused lifecycle tests covering stability, persistent duplicate suppression and queue-rejection recovery.
+- Explicit VATMS/NAIS control-message acceptance tests.
+- Offline Docker image export/load scripts.
+- Offline Docker image save/load round-trip validation is now part of the Docker gate.
 
-## Latest continuation work
-- Expanded the validation gate to include the complete parser validation pipeline and added `scripts/run_validation_gate.sh` as the single-command full acceptance entrypoint.
-- Reviewed the existing Router restart, fault-recovery, failure-scenario, TCP-routing, XML-contract, real-source and processor-spooling test coverage; these are now wired into the gate rather than being undocumented tests.
+## Final hardening changes
 
-- Data Router Web Console now has a server-side filesystem folder browser for FILE sources.
-- FILE source editing now provides selectable CSV/XML/JSON/TXT/NMEA/LOG/all-file patterns and persists the selected patterns to YAML.
-- Docker Compose now shares the live `docker/` configuration directory between Parser, Router, Forwarder and Web Console so UI edits target the same configuration files used by the services.
-- Web Console Docker configuration now points directly at the shared `/opt/validation/docker/sources.yaml`.
-- Fixed malformed escaped-newline YAML in the Docker parser reference-database section.
-- Added `scripts/validation_gate.py` for measurable compile, parser-contract, semantic, spoofing, Router integration/recovery and optional Docker gate execution.
-- Added Router configuration-manager coverage for absolute production folders and file-type patterns.
+- File-source in-memory in-flight tracking is now strictly a concurrent-submission guard and is always released.
+- Persistent SQLite state remains the authoritative duplicate/lifecycle record.
+- Queue rejection or file-read failure returns the file to DISCOVERED with the error retained, allowing a later scan to retry rather than permanently suppressing the file.
+- Validation gate now includes Task 62 lifecycle tests, explicit control-message tests and offline image save/load.
 
-## Still open before release
-1. Full iTrackLib 41-field setter/type/unit/max-length audit must be completed and committed as the authoritative matrix.
-2. Field-by-field PANS/NSC/WRS enrichment must be validated against representative real reference rows.
-3. All source datasets need measured line-count -> XML-count -> accepted/rejected -> field-coverage reports.
-4. VATMS/NAIS control-message semantics need explicit acceptance tests.
-5. Restart/recovery and duplicate/retry tests must be run through the complete Docker stack.
-6. End-to-end Router -> Parser -> Enrichment -> XML -> Forwarder acceptance remains outstanding.
-7. Offline image export/load must be tested on the target Ubuntu environment.
-8. No release tag/version should be created until these gates pass.
+## Release evidence still required
+
+1. **Post-change full gate run** on the prepared/offline Ubuntu environment. The previous 6/6 result predates the final hardening changes.
+2. **Production reference-data evidence:** representative real WRS/PANS/NSC databases must be supplied/mounted to validate field-level enrichment against authoritative rows. The repository does not contain those operational databases.
+3. **Production dataset measurement:** actual SAIS_IOR, SAIS_GLOBAL, MSIS, LRIT, VATMS and NAIS datasets must be present to produce measured file/line → parsed/rejected → XML → field-coverage reports. No production counts are invented.
+4. **Complete Docker-stack restart/recovery run:** the existing Router integration tests are physical service-boundary tests, while the release evidence should also run restart/recovery through the deployed Compose stack.
+5. **Authoritative iTrackLib max-length audit:** current XML field specs contain logical type/unit information, but a trustworthy maximum-length value must come from the authoritative iTrackLib source/contract. No max lengths are guessed.
+6. Do not create a release/version tag until the above evidence is captured.
+
+## Current status
+
+Implementation work for the repository is complete through the final hardening pass. The remaining items are **environment-dependent acceptance evidence**, not silently assumed production results.

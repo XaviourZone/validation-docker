@@ -74,6 +74,7 @@ def main() -> int:
         steps.extend([
             ("Docker Compose syntax", ["docker", "compose", "config", "--quiet"]),
             ("Docker image build", ["docker", "build", "-f", "docker/Dockerfile", "-t", "validation/parser:gate", "."]),
+            ("Offline image save/load", [python, "scripts/test_offline_image_roundtrip.py", "validation/parser:gate"]),
         ])
 
     results = [run_step(name, command) for name, command in steps]

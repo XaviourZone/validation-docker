@@ -27,6 +27,7 @@ import sqlite3
 import sys
 import tempfile
 import time
+import zipfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -69,6 +70,71 @@ def files_for(root: Path, source: str) -> list[Path]:
     if not d.exists():
         return []
     return sorted(p for p in d.rglob("*") if p.is_file())
+
+
+def _xlsx_first_sheet_to_csv(source: Path, target: Path) -> None:
+    """Convert the first worksheet of a simple XLSX file to CSV using stdlib only.
+
+    This keeps the acceptance runner usable on offline hosts where the optional
+    openpyxl dependency is not installed. The NSC importer still receives the
+    same tabular values, just through its supported CSV input path.
+    """
+    ns = {"a": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+          "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
+    rel_ns = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+    with zipfile.ZipFile(source) as zf:
+        shared = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+            for si in root.findall("a:si", ns):
+                shared.append("".join(t.text or "" for t in si.iter("{%s}t" % ns["a"])))
+
+        wb = ET.fromstring(zf.read("xl/workbook.xml"))
+        rels = ET.fromstring(zf.read("xl/_rels/workbook.xml.rels"))
+        rel_map = {
+            rel.attrib["Id"]: rel.attrib["Target"]
+            for rel in rels.findall("{%s}Relationship" % rel_ns)
+        }
+        first_sheet = wb.find("a:sheets/a:sheet", ns)
+        if first_sheet is None:
+            raise ValueError(f"No worksheet found in {source}")
+        rid = first_sheet.attrib.get("{%s}id" % ns["r"])
+        target_part = rel_map.get(rid)
+        if not target_part:
+            raise ValueError(f"Worksheet relationship missing in {source}")
+        sheet_part = target_part.lstrip("/")
+        if not sheet_part.startswith("xl/"):
+            sheet_part = "xl/" + sheet_part
+        root = ET.fromstring(zf.read(sheet_part))
+
+        rows = []
+        max_col = 0
+        for row in root.findall(".//a:sheetData/a:row", ns):
+            values = {}
+            for cell in row.findall("a:c", ns):
+                ref = cell.attrib.get("r", "")
+                letters = "".join(ch for ch in ref if ch.isalpha())
+                col = 0
+                for ch in letters.upper():
+                    col = col * 26 + ord(ch) - 64
+                max_col = max(max_col, col)
+                value = ""
+                v = cell.find("a:v", ns)
+                inline = cell.find("a:is", ns)
+                if inline is not None:
+                    value = "".join(t.text or "" for t in inline.iter("{%s}t" % ns["a"]))
+                elif v is not None and v.text is not None:
+                    value = v.text
+                    if cell.attrib.get("t") == "s":
+                        value = shared[int(value)] if int(value) < len(shared) else ""
+                values[col] = value
+            rows.append([values.get(i, "") for i in range(1, max_col + 1)])
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerows(rows)
 
 
 def build_reference_dbs(sample_root: Path, work: Path) -> dict[str, Path]:
@@ -123,8 +189,13 @@ def build_reference_dbs(sample_root: Path, work: Path) -> dict[str, Path]:
     (nsc_view / "EAST").mkdir(parents=True)
     (nsc_view / "WEST").mkdir(parents=True)
     for p in (sample_root / "NSC EAST and WEST").glob("*"):
-        target = nsc_view / ("EAST" if "EAST" in p.name.upper() else "WEST") / p.name
-        shutil.copy2(p, target)
+        region = "EAST" if "EAST" in p.name.upper() else "WEST"
+        if p.suffix.lower() == ".xlsx":
+            target = nsc_view / region / f"{p.stem}.csv"
+            _xlsx_first_sheet_to_csv(p, target)
+        else:
+            target = nsc_view / region / p.name
+            shutil.copy2(p, target)
     nsc_cfg["imports"]["nsc"]["input_dir"] = str(nsc_view)
     run_nsc_import(nsc_cfg)
 
@@ -178,6 +249,10 @@ def run_source(processor: PipelineProcessor, source: str, paths: list[Path], out
         stats["records_rejected"] += result.records_rejected
         stats["successful_envelopes"] += int(result.success)
         stats["failed_envelopes"] += int(not result.success)
+        if result.errors:
+            stats.setdefault("error_samples", [])
+            stats["error_samples"].extend(result.errors[:10])
+            stats["error_samples"] = stats["error_samples"][:20]
 
     xml_files_after = len(list(output_dir.glob("*.xml")))
     stats["xml_generated"] = xml_files_after - xml_files_before
@@ -263,13 +338,15 @@ def main() -> int:
                 processor, source, files_for(sample_root, source), xml_dir
             )
 
+        reference_missing = [name for name, path in refs.items() if not path.exists()]
         report = {
             "acceptance_time_utc": datetime.now(timezone.utc).isoformat(),
             "sample_root": str(sample_root),
             "reference_databases": db_counts(refs),
             "sources": source_results,
             "xml_coverage": xml_coverage(xml_dir),
-            "status": "PASS",
+            "status": "FAIL" if reference_missing else "PASS",
+            "reference_missing": reference_missing,
         }
 
         (output / "production_measurement.json").write_text(
@@ -317,7 +394,7 @@ def main() -> int:
             "\n".join(lines) + "\n", encoding="utf-8"
         )
         print(json.dumps({
-            "status": "PASS",
+            "status": report["status"],
             "parsed_records": total,
             "rejected_records": rejected,
             "xml_documents": xml_docs,

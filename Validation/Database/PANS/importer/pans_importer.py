@@ -51,11 +51,15 @@ def flatten_xml(element, prefix="", result=None):
         
     tag = element.tag.split('}')[-1]  # Remove namespace if any
     
-    # Process text content
+    # Process text content. XML source files can contain tags that differ
+    # only by case (for example PortCode and Portcode). SQLite column names
+    # are case-insensitive, so preserve the first spelling and merge values
+    # under that canonical key instead of creating a duplicate column.
     if element.text and element.text.strip():
         val = element.text.strip()
-        if tag in result:
-            result[tag] = f"{result[tag]}; {val}"
+        existing_key = next((k for k in result if k.lower() == tag.lower()), None)
+        if existing_key is not None:
+            result[existing_key] = f"{result[existing_key]}; {val}"
         else:
             result[tag] = val
             

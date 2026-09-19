@@ -34,6 +34,7 @@ import xml.etree.ElementTree as ET
 
 from Validation.Data_Parser.app.models.common import ParserEnvelope
 from Validation.Data_Parser.app.pipeline.processor import PipelineProcessor
+from Validation.Data_Parser.app.pipeline.normalizer import LOGICAL_FIELDS_41
 from Validation.Data_Parser.app.pipeline.reference_db import ReferenceDB
 from Validation.Data_Parser.app.pipeline.track_state import TrackStateDB
 from Validation.Data_Parser.app.pipeline.ais_state import AISStateDB
@@ -42,20 +43,7 @@ from Validation.Database.NSC.importer.nsc_importer import run_import as run_nsc_
 from Validation.Database.WRS.importer.wrs_importer import run_import as run_wrs_import
 
 
-CANONICAL_FIELDS = [
-    "sys.trackNumber", "foreign.trackNumber", "foreign.trackNumberSystem",
-    "id.mmsi", "id.imo", "id.callsign", "vessel.name", "vessel.description",
-    "vessel.flag", "vessel.length", "vessel.beam", "vessel.draft",
-    "vessel.grosstonnage", "vessel.type", "ais.typeAndCargo",
-    "ais.navStatus", "kinematic.pos.LLA.lat", "kinematic.pos.LLA.lon",
-    "kinematic.speed", "kinematic.course.true", "kinematic.heading.true",
-    "timestamp.source", "timestamp.received", "voyage.destination",
-    "voyage.origin", "voyage.eta", "voyage.etd", "voyage.arrival",
-    "voyage.departure", "cat.identity", "cat.annotation", "cat.source",
-    "cat.confidence", "vessel.remarks", "track.flag.active",
-    "track.flag.spoofing", "track.flag.gap", "track.flag.anomaly",
-    "id.mmsi.country", "id.mmsi.destination", "vessel.id",
-]
+CANONICAL_FIELDS = LOGICAL_FIELDS_41
 
 SOURCE_DIRS = {
     "SAIS_IOR": "SAIS_IOR",
@@ -81,10 +69,21 @@ def build_reference_dbs(sample_root: Path, work: Path) -> dict[str, Path]:
     (db_root / "PANS").mkdir(parents=True)
     (db_root / "NSC").mkdir(parents=True)
 
+    # WRS importer expects lowercase datasets/decode directory names. Build a
+    # temporary view of the supplied source tree so the importer is exercised
+    # without changing the user's source files.
+    wrs_view = work / "wrs_input"
+    (wrs_view / "datasets").mkdir(parents=True)
+    (wrs_view / "decode").mkdir(parents=True)
+    for p in (sample_root / "WRS" / "Datasets").glob("*"):
+        shutil.copy2(p, wrs_view / "datasets" / p.name)
+    for p in (sample_root / "WRS" / "Decode Files").glob("*"):
+        shutil.copy2(p, wrs_view / "decode" / p.name)
+
     wrs_cfg = {
         "database": {"wrs": {"path": str(db_root / "WRS" / "wrs.db")}},
         "imports": {"wrs": {
-            "input_dir": str(sample_root / "WRS"),
+            "input_dir": str(wrs_view),
             "staging_db": str(db_root / "WRS" / "wrs_staging.db"),
             "batch_size": 10000}},
         "logging": {"log_dir": str(work / "logs"), "level": "WARNING"},
@@ -186,7 +185,11 @@ def xml_coverage(xml_dir: Path) -> dict:
         try:
             root = ET.parse(path).getroot()
             total_docs += 1
-            found = {el.tag for el in root.iter()}
+            found = {
+                (el.text or "").strip()
+                for el in root.iter()
+                if el.tag.split("}")[-1] == "id" and (el.text or "").strip()
+            }
             for field in CANONICAL_FIELDS:
                 if field in found:
                     present[field] += 1

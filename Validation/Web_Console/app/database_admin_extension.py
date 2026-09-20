@@ -380,7 +380,13 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
             if not data:
                 raise ValueError("Uploaded file is empty")
 
-            relative = self._safe_relative_upload_path(part["filename"])
+            path_part = parts.get("relative_path")
+            relative_name = (
+                (path_part.get("data") or b"").decode("utf-8", errors="strict")
+                if path_part and path_part.get("data") is not None
+                else part["filename"]
+            )
+            relative = self._safe_relative_upload_path(relative_name)
             target = (root / relative).resolve()
             try:
                 target.relative_to(root)

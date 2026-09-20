@@ -275,7 +275,8 @@ class TestValidationPipeline(unittest.TestCase):
     # ──────────────────────────────────────────────────────────────────────────
 
     def test_spoofing_detection_and_remarks(self):
-        # Normal record matching WRS
+        # Remarks are line-oriented and always include the three reference
+        # source match statuses plus MMSI/IMO/name transmitted-vs-actual values.
         rec = NormalizedRecord(
             source_name="MSIS",
             message_id="m1",
@@ -283,7 +284,14 @@ class TestValidationPipeline(unittest.TestCase):
             vessel_name="MY VESSEL",
         )
         enr = self.enricher.enrich(rec)
-        self.assertIn("SOURCE: IMAC MSIS", enr.vessel_remarks)
+        self.assertIn("NSC      | CLEARED", enr.vessel_remarks)
+        self.assertIn("PANS     | CLEARED", enr.vessel_remarks)
+        self.assertIn("WRS      | CLEARED", enr.vessel_remarks)
+        self.assertIn("SPOOFING | MMSI", enr.vessel_remarks)
+        self.assertIn("TRANSMITTING=", enr.vessel_remarks)
+        self.assertIn("ACTUAL=", enr.vessel_remarks)
+        self.assertIn("SOURCE   | FEED", enr.vessel_remarks)
+        self.assertNotIn("VIGILANCE SCORE", enr.vessel_remarks)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 8. All Sources (Normal End-to-End through PipelineProcessor)

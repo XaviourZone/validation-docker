@@ -26,7 +26,7 @@ if (( KERNEL_MAJOR < 3 || (KERNEL_MAJOR == 3 && KERNEL_MINOR < 10) )); then
   exit 1
 fi
 
-if [[ ! -f "${BUNDLE}/docker-24.0.2.tgz" || ! -f "${BUNDLE}/docker-compose-linux-x86_64" ]]; then
+if [[ ! -f "${BUNDLE}/docker-24.0.9.tgz" || ! -f "${BUNDLE}/docker-compose-linux-x86_64" ]]; then
   echo "ERROR: offline/docker-static bundle is incomplete." >&2
   exit 1
 fi
@@ -42,7 +42,7 @@ if [[ -f "${BUNDLE}/SHA256SUMS" ]]; then
 fi
 
 echo "[2/6] Installing Docker static binaries..."
-sudo tar -xzf "${BUNDLE}/docker-24.0.2.tgz" -C /usr/local/bin --strip-components=1
+sudo tar -xzf "${BUNDLE}/docker-24.0.9.tgz" -C /usr/local/bin --strip-components=1
 
 echo "[3/6] Installing Docker Compose..."
 sudo install -Dm755 "${BUNDLE}/docker-compose-linux-x86_64" /usr/local/libexec/docker/cli-plugins/docker-compose

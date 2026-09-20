@@ -8,6 +8,7 @@
 
   // State Management
   const state = {
+    initialLoadComplete: false,
     currentTab: "dashboard",
     pollIntervalMs: 3000,
     pollTimer: null,
@@ -34,6 +35,9 @@
     activityList: document.getElementById("activity-list"),
     errorList: document.getElementById("error-list"),
     toastContainer: document.getElementById("toast-container"),
+    loadingOverlay: document.getElementById("app-loading-overlay"),
+    loadingTitle: document.getElementById("app-loading-title"),
+    loadingSubtitle: document.getElementById("app-loading-subtitle"),
     navItems: document.querySelectorAll(".nav-item"),
     viewTabs: document.querySelectorAll(".view-tab"),
 
@@ -90,7 +94,8 @@
     setupControls();
     setupModalListeners();
     fetchParserDestinations();
-    fetchDashboardData();
+    showAppLoading("Starting Validation", "Connecting to local services…");
+    fetchDashboardData().finally(() => { state.initialLoadComplete = true; hideAppLoading(); });
     startPolling();
 
     // Pause polling when browser tab is inactive to save CPU
@@ -102,6 +107,35 @@
         startPolling();
       }
     });
+  }
+
+  function showAppLoading(title, subtitle) {
+    if (!dom.loadingOverlay) return;
+    if (dom.loadingTitle) dom.loadingTitle.textContent = title || "Working";
+    if (dom.loadingSubtitle) dom.loadingSubtitle.textContent = subtitle || "Please wait…";
+    dom.loadingOverlay.classList.remove("hidden");
+    dom.loadingOverlay.setAttribute("aria-busy", "true");
+  }
+
+  function hideAppLoading() {
+    if (!dom.loadingOverlay) return;
+    dom.loadingOverlay.classList.add("hidden");
+    dom.loadingOverlay.setAttribute("aria-busy", "false");
+  }
+
+  function setButtonBusy(button, busy, text) {
+    if (!button) return;
+    if (busy) {
+      if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="loading-inline">' + (text || "Working…") + '</span>';
+    } else {
+      button.disabled = false;
+      if (button.dataset.originalText) {
+        button.innerHTML = button.dataset.originalText;
+        delete button.dataset.originalText;
+      }
+    }
   }
 
   // Navigation Setup
@@ -818,10 +852,12 @@
 
     state.confirmCallback = onConfirm;
     dom.modalConfirmation.classList.add("open");
+    document.body.classList.add("modal-open");
   }
 
   function closeConfirmModal() {
     if (dom.modalConfirmation) dom.modalConfirmation.classList.remove("open");
+    document.body.classList.remove("modal-open");
     state.confirmCallback = null;
   }
 
@@ -859,6 +895,7 @@
     updateEffectivePreview();
 
     dom.modalSourceConfig.classList.add("open");
+    document.body.classList.add("modal-open");
   }
 
   // Source Modal: Edit Mode
@@ -914,6 +951,7 @@
 
   function closeSourceModal() {
     if (dom.modalSourceConfig) dom.modalSourceConfig.classList.remove("open");
+    document.body.classList.remove("modal-open");
   }
 
   function selectSourceType(type) {
@@ -1012,7 +1050,7 @@
     clearModalFeedback();
     const payload = getSourceFormData();
 
-    if (dom.btnModalValidate) dom.btnModalValidate.disabled = true;
+    setButtonBusy(dom.btnModalValidate, true, "Checking…");
 
     try {
       const res = await fetch("/api/router/sources/validate", {
@@ -1033,7 +1071,7 @@
     } catch (err) {
       showModalFeedback("error", `Network/Server Error: ${err.message}`);
     } finally {
-      if (dom.btnModalValidate) dom.btnModalValidate.disabled = false;
+      setButtonBusy(dom.btnModalValidate, false);
     }
   }
 
@@ -1042,10 +1080,7 @@
     clearModalFeedback();
     const payload = getSourceFormData();
 
-    if (dom.btnModalSave) {
-      dom.btnModalSave.disabled = true;
-      dom.btnModalSave.innerHTML = `⟳ Saving...`;
-    }
+    setButtonBusy(dom.btnModalSave, true, "Saving…");
 
     try {
       const res = await fetch("/api/router/sources/save", {
@@ -1066,10 +1101,7 @@
     } catch (err) {
       showModalFeedback("error", `Network Error: ${err.message}`);
     } finally {
-      if (dom.btnModalSave) {
-        dom.btnModalSave.disabled = false;
-        dom.btnModalSave.innerHTML = `💾 Save Configuration`;
-      }
+      setButtonBusy(dom.btnModalSave, false);
     }
   }
 

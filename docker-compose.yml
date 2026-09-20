@@ -40,7 +40,7 @@ services:
       - ./runtime/data_inflow:/opt/validation/DATA_INFLOW
       - ./runtime/router-state:/opt/validation/Validation/Data_Router/state
       - ./runtime/router-logs:/opt/validation/Validation/Data_Router/logs
-      - /:/opt/validation/hostfs:ro
+      - /:/opt/validation/hostfs:rw
     environment:
       VALIDATION_HOST_FILESYSTEM_ROOT: /opt/validation/hostfs
     ports:

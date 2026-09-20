@@ -1266,6 +1266,11 @@
     // WRS
     if (data.wrs) {
       renderStatus("db-wrs-status", data.wrs.status, data.wrs.is_refreshing);
+      const wrsButton = document.getElementById("btn-wrs-update");
+      if (wrsButton && !wrsButton.dataset.operationBusy) {
+        wrsButton.disabled = !!data.wrs.is_refreshing;
+        wrsButton.title = data.wrs.is_refreshing ? "WRS refresh is already running" : "";
+      }
       setElem("db-wrs-file", data.wrs.database);
       setElem("db-wrs-size", data.wrs.size_mb + " MB");
       setElem("db-wrs-tables", data.wrs.table_count);

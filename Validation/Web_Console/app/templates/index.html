@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/css/minimal.css?v=20260918-r2">
 </head>
 <body>
+<div class="app-loading-overlay" id="app-loading-overlay" aria-live="polite" aria-busy="true"><div class="app-loading-card"><div class="app-loading-spinner" aria-hidden="true"></div><div><div class="app-loading-title" id="app-loading-title">Starting Validation</div><div class="app-loading-subtitle" id="app-loading-subtitle">Connecting to local services…</div></div></div></div>
 <aside class="sidebar">
   <div class="sidebar-header"><div><h2>Validation</h2><span>Maritime Pipeline</span></div></div>
   <nav class="sidebar-nav">
@@ -89,7 +90,7 @@
   </main>
 </div>
 
-<div class="modal-backdrop" id="modal-source-config">
+<div class="modal-backdrop" id="modal-source-config" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
   <div class="modal-container">
     <div class="modal-header"><div class="modal-title"><span id="modal-title-icon"></span><span id="modal-title-text">Configure Data Source</span></div><button type="button" class="modal-close-btn" id="btn-modal-close">✕</button></div>
     <div class="modal-body">
@@ -110,7 +111,7 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="folder-browser-modal">
+<div class="modal-backdrop" id="folder-browser-modal" role="dialog" aria-modal="true" aria-labelledby="folder-browser-current">
   <div class="modal-container" style="max-width:720px">
     <div class="modal-header"><div class="modal-title">Select Input Folder</div><button class="modal-close-btn" id="folder-browser-close" type="button">✕</button></div>
     <div class="modal-body">
@@ -126,7 +127,7 @@
   </div>
 </div>
 
-<div class="modal-backdrop" id="modal-confirmation">
+<div class="modal-backdrop" id="modal-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
   <div class="modal-container" style="max-width:440px"><div class="modal-header"><div class="modal-title"><span id="confirm-title">Confirm</span></div><button class="modal-close-btn" id="btn-confirm-close">✕</button></div><div class="modal-body"><div id="confirm-message"></div><div id="confirm-subtext"></div></div><div class="modal-footer"><button class="btn btn-secondary" id="btn-confirm-cancel">Cancel</button><button class="btn btn-danger" id="btn-confirm-proceed">Confirm</button></div></div>
 </div>
 

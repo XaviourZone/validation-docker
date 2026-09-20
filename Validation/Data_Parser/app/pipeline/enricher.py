@@ -453,5 +453,4 @@ class VesselEnricher:
             )
         else:
             rec.track_flag_active = True
-
-
+        return rec

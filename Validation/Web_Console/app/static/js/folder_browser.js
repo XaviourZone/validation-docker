@@ -60,7 +60,7 @@
       }
 
       currentPath = data.path || path;
-      if (current) current.textContent = data.logical_path ? "DATA_INFLOW/" + data.logical_path : "DATA_INFLOW";
+      if (current) current.textContent = data.logical_path || "/";
       if (parentBtn) parentBtn.disabled = !data.parent || data.parent === currentPath;
       if (data.logical_path !== undefined) modal.dataset.logicalPath = data.logical_path;
       renderEntries(data.entries || []);

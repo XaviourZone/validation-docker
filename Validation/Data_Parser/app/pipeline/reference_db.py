@@ -65,6 +65,12 @@ class VesselContext:
     # WRS VIGILANCE
     wrs_vigilance_score: Optional[float] = None
 
+    # WRS analysis / risk signals used in vessel remarks
+    wrs_ais_spoofing_detail: Optional[str] = None
+    wrs_ais_gap_detail: Optional[str] = None
+    wrs_ais_identity_detail: Optional[str] = None
+    wrs_sanctions_detail: Optional[str] = None
+
     # WRS CALLINGS (most recent)
     wrs_calling_place:      Optional[str] = None
     wrs_calling_arrival:    Optional[str] = None
@@ -98,6 +104,10 @@ class VesselContext:
     pans_berman_etd:  Optional[str]   = None
     pans_draft_fwd:   Optional[float] = None
     pans_draft_aft:   Optional[float] = None
+    pans_vcn:         Optional[str]   = None
+    pans_cargo_description: Optional[str] = None
+    pans_cargo_tonnage: Optional[float] = None
+    pans_hazardous:   Optional[str]   = None
 
     # NSC
     nsc_vessel_name:  Optional[str]   = None
@@ -105,6 +115,9 @@ class VesselContext:
     nsc_mmsi:         Optional[int]   = None
     nsc_callsign:     Optional[str]   = None
     nsc_type:         Optional[str]   = None
+    nsc_region:       Optional[str]   = None
+    nsc_begin_date:   Optional[str]   = None
+    nsc_end_date:     Optional[str]   = None
 
     # Reference DB that directly matched the transmitted MMSI.
     primary_mmsi_source: Optional[str] = None
@@ -364,6 +377,77 @@ class ReferenceDB:
             ctx.record_provenance("voyage.arrival", ctx.wrs_calling_arrival, "WRS", match_method)
             ctx.record_provenance("voyage.departure", ctx.wrs_calling_sailing, "WRS", match_method)
 
+        # 7. High-value WRS risk/analysis records for vessel remarks.
+        # These are descriptive reference signals; they do not overwrite
+        # incoming AIS values and are shown with their source-table details.
+        try:
+            rr = c.execute(
+                "SELECT START_DATE, END_DATE, RISK_INDICATORS, START_LOCATION, END_LOCATION "
+                "FROM wrs_datasets_aisspoofing_risk "
+                "WHERE VESSEL_ID=? ORDER BY START_DATE DESC LIMIT 1", (vid,)
+            ).fetchone()
+            if rr:
+                parts = []
+                if _str(rr["RISK_INDICATORS"]): parts.append(f"INDICATOR={_str(rr['RISK_INDICATORS'])}")
+                if _str(rr["START_DATE"]): parts.append(f"START={_str(rr['START_DATE'])}")
+                if _str(rr["END_DATE"]): parts.append(f"END={_str(rr['END_DATE'])}")
+                if _str(rr["START_LOCATION"]): parts.append(f"FROM={_str(rr['START_LOCATION'])}")
+                if _str(rr["END_LOCATION"]): parts.append(f"TO={_str(rr['END_LOCATION'])}")
+                ctx.wrs_ais_spoofing_detail = " | ".join(parts) or "PRESENT"
+        except sqlite3.Error as exc:
+            log.warning("WRS AIS spoofing risk lookup failed for VESSEL_ID=%s: %s", vid, exc)
+
+        try:
+            rr = c.execute(
+                "SELECT START_DATE, END_DATE, RISK_INDICATORS, HIGH_RISK_AREA "
+                "FROM wrs_datasets_ais_gap_risk "
+                "WHERE VESSEL_ID=? ORDER BY START_DATE DESC LIMIT 1", (vid,)
+            ).fetchone()
+            if rr:
+                parts = []
+                if _str(rr["RISK_INDICATORS"]): parts.append(f"INDICATOR={_str(rr['RISK_INDICATORS'])}")
+                if _str(rr["HIGH_RISK_AREA"]): parts.append(f"AREA={_str(rr['HIGH_RISK_AREA'])}")
+                if _str(rr["START_DATE"]): parts.append(f"START={_str(rr['START_DATE'])}")
+                if _str(rr["END_DATE"]): parts.append(f"END={_str(rr['END_DATE'])}")
+                ctx.wrs_ais_gap_detail = " | ".join(parts) or "PRESENT"
+        except sqlite3.Error as exc:
+            log.warning("WRS AIS gap risk lookup failed for VESSEL_ID=%s: %s", vid, exc)
+
+        try:
+            rr = c.execute(
+                "SELECT MMSI_NUMBER, RELATED_VESSEL_NAME, RISK_INDICATORS, START_DATE, END_DATE "
+                "FROM wrs_datasets_ais_mnptn_risk "
+                "WHERE VESSEL_ID=? ORDER BY START_DATE DESC LIMIT 1", (vid,)
+            ).fetchone()
+            if rr:
+                parts = []
+                if _str(rr["MMSI_NUMBER"]): parts.append(f"MMSI={_str(rr['MMSI_NUMBER'])}")
+                if _str(rr["RELATED_VESSEL_NAME"]): parts.append(f"RELATED={_str(rr['RELATED_VESSEL_NAME'])}")
+                if _str(rr["RISK_INDICATORS"]): parts.append(f"INDICATOR={_str(rr['RISK_INDICATORS'])}")
+                if _str(rr["START_DATE"]): parts.append(f"START={_str(rr['START_DATE'])}")
+                if _str(rr["END_DATE"]): parts.append(f"END={_str(rr['END_DATE'])}")
+                ctx.wrs_ais_identity_detail = " | ".join(parts) or "PRESENT"
+        except sqlite3.Error as exc:
+            log.warning("WRS AIS identity risk lookup failed for VESSEL_ID=%s: %s", vid, exc)
+
+        try:
+            sr = c.execute(
+                "SELECT SOURCE, PROGRAM, FIRST_PUBLISHED, LAST_PUBLISHED, START_DATE, END_DATE "
+                "FROM wrs_datasets_vessel_sanctions "
+                "WHERE VESSEL_ID=? ORDER BY START_DATE DESC LIMIT 1", (vid,)
+            ).fetchone()
+            if sr:
+                parts = []
+                if _str(sr["SOURCE"]): parts.append(f"SOURCE={_str(sr['SOURCE'])}")
+                if _str(sr["PROGRAM"]): parts.append(f"PROGRAM={_str(sr['PROGRAM'])}")
+                if _str(sr["FIRST_PUBLISHED"]): parts.append(f"FIRST={_str(sr['FIRST_PUBLISHED'])}")
+                if _str(sr["LAST_PUBLISHED"]): parts.append(f"LAST={_str(sr['LAST_PUBLISHED'])}")
+                if _str(sr["START_DATE"]): parts.append(f"START={_str(sr['START_DATE'])}")
+                if _str(sr["END_DATE"]): parts.append(f"END={_str(sr['END_DATE'])}")
+                ctx.wrs_sanctions_detail = " | ".join(parts) or "PRESENT"
+        except sqlite3.Error as exc:
+            log.warning("WRS sanctions lookup failed for VESSEL_ID=%s: %s", vid, exc)
+
     # ── PANS ─────────────────────────────────────────────────────────────────
 
     def _resolve_pans(
@@ -442,6 +526,20 @@ class ReferenceDB:
 
             cs  = _str(row["CallSign"]) or callsign
 
+            # CALINV provides the VCN allocation. Keep it separate from
+            # CALINF voyage identity, but expose the VCN for remarks.
+            try:
+                calinv = None
+                if ctx.pans_imo:
+                    calinv = c.execute(
+                        "SELECT VCN FROM pans_calinv WHERE IMONumber=? ORDER BY _id DESC LIMIT 1",
+                        (str(ctx.pans_imo),)
+                    ).fetchone()
+                if calinv and _str(calinv["VCN"]):
+                    ctx.pans_vcn = _str(calinv["VCN"])
+            except sqlite3.Error as exc:
+                log.warning("PANS CALINV VCN lookup failed for IMO=%s: %s", ctx.pans_imo, exc)
+
             # CALINF
             calinf = None
             if ctx.pans_imo:
@@ -485,6 +583,11 @@ class ReferenceDB:
                 ctx.pans_berman_etd  = _str(berman["EDTD"])
                 ctx.pans_draft_fwd   = _to_float(berman["DraftFwd"])
                 ctx.pans_draft_aft   = _to_float(berman["DraftAft"])
+
+                ctx.pans_vcn         = _str(berman["VCN"])
+                ctx.pans_cargo_description = _str(berman["CargoDescription"])
+                ctx.pans_cargo_tonnage = _to_float(berman["TotalCargoTonnage"])
+                ctx.pans_hazardous    = _str(berman["HazCargoOnBoard"])
                 ctx.record_provenance("voyage.destination", ctx.pans_berman_dest, "PANS", match_method)
                 ctx.record_provenance("voyage.arrival", ctx.pans_berman_eta, "PANS", match_method)
                 ctx.record_provenance("voyage.etd", ctx.pans_berman_etd, "PANS", match_method)
@@ -551,6 +654,9 @@ class ReferenceDB:
             ctx.nsc_mmsi        = _to_int(row["ID_MMSI"])
             ctx.nsc_callsign    = _str(row["ID_CALLSIGN"])
             ctx.nsc_type        = _str(row["TYPE"])
+            ctx.nsc_region      = _str(row["SOURCE_REGION"])
+            ctx.nsc_begin_date  = _str(row["BEGIN_DATE"])
+            ctx.nsc_end_date    = _str(row["END_DATE"])
 
             ctx.record_provenance("vessel.name", ctx.nsc_vessel_name, "NSC", match_method)
             ctx.record_provenance("id.imo", ctx.nsc_imo, "NSC", match_method)

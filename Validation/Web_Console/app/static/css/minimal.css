@@ -453,3 +453,6 @@ html,body{
 .sources-table .src-action-group{gap:4px!important;justify-content:flex-start!important}
 .sources-table .src-btn{padding:0 8px!important;height:28px!important}
 @media(max-width:900px){.sources-table{min-width:720px!important}.sources-table col.col-src-name{width:16%!important}.sources-table col.col-src-input{width:31%!important}.sources-table col.col-src-actions{width:19%!important}}
+
+
+.src-id-editor{display:flex;align-items:center;gap:5px;min-width:0}.src-id-input{width:100%;min-width:0;background:var(--panel-bg,#10151d);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);padding:5px 7px;font-family:inherit;font-size:12px}.src-id-save{height:28px;padding:0 7px;border:1px solid var(--border-color);border-radius:5px;background:var(--panel-bg,#10151d);color:var(--text-primary);cursor:pointer;font-size:11px}.src-id-save:hover{border-color:var(--accent-blue);color:var(--accent-blue)}

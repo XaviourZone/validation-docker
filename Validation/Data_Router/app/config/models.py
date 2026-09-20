@@ -49,7 +49,8 @@ class FileSourceConfig(BaseSourceConfig):
     poll_interval_seconds: float = 1.0
     stability_window_seconds: float = 1.0
     file_patterns: List[str] = field(default_factory=lambda: ["*.csv", "*.txt", "*"])
-    preserve_file: bool = True
+    preserve_file: bool = False
+    processed_folder: str = "processed"
 
 
 @dataclass

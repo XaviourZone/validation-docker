@@ -90,9 +90,9 @@
             <div class="database-source-label">WRS source folder</div>
             <div class="database-folder-row">
               <input id="db-wrs-folder" class="form-input" readonly placeholder="Select WRS folder">
-              <button class="btn btn-secondary" id="btn-wrs-browse" type="button" data-folder-browser-target="db-wrs-folder" data-folder-browser-api="/api/database/filesystem/browse" data-folder-browser-title="Select WRS folder">Browse…</button>
+              <button class="btn btn-secondary" id="btn-wrs-browse" type="button">Select Folder…</button>
             </div>
-            <div class="database-source-hint">The selected WRS folder must contain <strong>Datasets</strong> and <strong>Decode files</strong>.</div>
+            <input id="db-wrs-folder-picker" class="database-native-folder-picker" type="file" webkitdirectory directory multiple hidden><div class="database-source-hint">Select any folder from this computer. The console uploads it, validates <strong>Datasets</strong> and <strong>Decode files</strong>, then uses it as the WRS source.</div>
             <div class="database-subfolder-grid">
               <div><span>Datasets</span><code id="db-wrs-datasets">Not selected</code></div>
               <div><span>Decode files</span><code id="db-wrs-decode">Not selected</code></div>
@@ -118,12 +118,12 @@
             <div class="database-source-label">PANS XML source folder</div>
             <div class="database-folder-row">
               <input id="db-pans-folder" class="form-input" readonly placeholder="Select PANS XML folder">
-              <button class="btn btn-secondary" id="btn-pans-browse" type="button" data-folder-browser-target="db-pans-folder" data-folder-browser-api="/api/database/filesystem/browse" data-folder-browser-title="Select PANS XML folder">Browse…</button>
+              <button class="btn btn-secondary" id="btn-pans-browse" type="button">Select Folder…</button>
             </div>
-            <div class="database-source-hint">XML files in this folder are continuously monitored and imported. No Start/Stop/Process controls are required.</div>
+            <input id="db-pans-folder-picker" class="database-native-folder-picker" type="file" webkitdirectory directory multiple hidden><div class="database-source-hint">Select any folder from this computer. Its XML files are uploaded and then continuously monitored. No Start/Stop/Process controls are required.</div>
             <div id="db-pans-feedback" class="database-feedback" aria-live="polite"></div>
             <div class="database-action-row">
-              <button class="btn btn-primary" id="btn-pans-save-folder" type="button">Save Folder</button>
+              <button class="btn btn-primary" id="btn-pans-save-folder" type="button">Upload &amp; Use Folder</button>
             </div>
           </div>
         </section>

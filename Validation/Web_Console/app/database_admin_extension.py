@@ -138,6 +138,9 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
         if path == "/api/database/nsc/config":
             self._database_reference_config("nsc")
             return
+        if path == "/api/database/table":
+            self._database_view_table()
+            return
 
         return original_get(self)
 
@@ -432,6 +435,67 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
         except Exception as exc:
             self._json_response({"success": False, "error": str(exc)}, status=HTTPStatus.UNPROCESSABLE_ENTITY)
 
+    def _database_view_table(self):
+        try:
+            query = parse_qs(urlparse(self.path).query)
+            db_name = (query.get("db") or [""])[0].strip().lower()
+            table = (query.get("table") or [""])[0].strip()
+            limit = min(max(int((query.get("limit") or ["50"])[0]), 1), 100)
+            offset = max(int((query.get("offset") or ["0"])[0]), 0)
+
+            database_paths = {
+                "wrs": self.database_client.wrs_path,
+                "pans": self.database_client.pans_path,
+                "nsc": self.database_client.nsc_path,
+            }
+            if db_name not in database_paths:
+                raise ValueError("Database must be one of: wrs, pans, nsc")
+            if not table or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" for ch in table):
+                raise ValueError("Invalid table name")
+
+            db_path = database_paths[db_name]
+            if not db_path.exists():
+                raise ValueError(f"Database not found: {db_path}")
+
+            import sqlite3
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+            conn.row_factory = sqlite3.Row
+            try:
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? AND name NOT LIKE 'sqlite_%'",
+                    (table,),
+                ).fetchone()
+                if not exists:
+                    raise ValueError(f"Table '{table}' not found in {db_name.upper()}")
+
+                columns = [row["name"] for row in conn.execute(f'PRAGMA table_info("{table}")').fetchall()]
+                total = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
+                rows = [
+                    dict(row)
+                    for row in conn.execute(
+                        f'SELECT * FROM "{table}" LIMIT ? OFFSET ?',
+                        (limit, offset),
+                    ).fetchall()
+                ]
+            finally:
+                conn.close()
+
+            self._json_response({
+                "success": True,
+                "database": db_name.upper(),
+                "table": table,
+                "columns": columns,
+                "rows": rows,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            })
+        except Exception as exc:
+            self._json_response(
+                {"success": False, "error": str(exc)},
+                status=HTTPStatus.BAD_REQUEST,
+            )
+
     def _database_upload_nsc(self):
         try:
             parts = _read_multipart(self)
@@ -539,3 +603,6 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
     handler_class._database_upload_nsc = _database_upload_nsc
     handler_class._database_upload_folder_file = _database_upload_folder_file
     handler_class._database_finalize_folder_upload = _database_finalize_folder_upload
+    handler_class._folder_upload_root = _folder_upload_root
+    handler_class._safe_relative_upload_path = _safe_relative_upload_path
+    handler_class._database_view_table = _database_view_table

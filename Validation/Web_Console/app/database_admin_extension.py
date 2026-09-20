@@ -353,9 +353,9 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
                 filename = Path(part["filename"]).name
                 suffix = Path(filename).suffix.lower()
 
-                if suffix not in (".xlsx", ".xls", ".csv"):
+                if suffix not in (".xlsx", ".csv"):
                     raise ValueError(
-                        f"NSC {region.upper()} accepts only .xlsx, .xls or .csv files"
+                        f"NSC {region.upper()} accepts only .xlsx or .csv files"
                     )
 
                 data = part["data"]

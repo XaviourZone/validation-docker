@@ -4,17 +4,21 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
-# Prefer the bundled static Compose binary when present.
-# Otherwise use the system docker compose command.
-BUNDLED_COMPOSE="$REPO_DIR/offline/docker-static/docker-compose-linux-x86_64"
-if [[ -x "$BUNDLED_COMPOSE" ]]; then
-  COMPOSE=(sudo "$BUNDLED_COMPOSE" -H unix:///var/run/docker.sock)
+# The host used for this project may have a Docker API-version mismatch.
+# Prefer the known-good static Compose binary from ~/Desktop when the repo
+# does not contain its offline copy. Fall back to the repo copy, then system
+# docker compose.
+REPO_COMPOSE="$REPO_DIR/offline/docker-static/docker-compose-linux-x86_64"
+DESKTOP_COMPOSE="$HOME/Desktop/validation-docker/offline/docker-static/docker-compose-linux-x86_64"
+
+if [[ -x "$REPO_COMPOSE" ]]; then
+  COMPOSE=(sudo "$REPO_COMPOSE" -H unix:///var/run/docker.sock)
+elif [[ -x "$DESKTOP_COMPOSE" ]]; then
+  COMPOSE=(sudo "$DESKTOP_COMPOSE" -H unix:///var/run/docker.sock)
 elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   COMPOSE=(docker compose)
 else
   echo "ERROR: No usable Docker Compose found."
-  echo "       Bundled binary: $BUNDLED_COMPOSE"
-  echo "       System command: docker compose"
   exit 1
 fi
 

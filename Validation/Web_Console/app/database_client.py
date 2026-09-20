@@ -40,6 +40,7 @@ class DatabaseClient:
             "nsc": False,
             "pans_once": False
         }
+        self.wrs_refresh_result = None
 
     def _importer_command(self, script: Path, *args: str):
         command = [sys.executable, str(script)]
@@ -99,7 +100,8 @@ class DatabaseClient:
             "last_import": "Unknown",
             "import_status": "UNKNOWN",
             "tables": {},
-            "is_refreshing": self.active_operations["wrs"]
+            "is_refreshing": self.active_operations["wrs"],
+            "refresh_result": self.wrs_refresh_result
         }
         
         if self.wrs_path.exists():
@@ -220,6 +222,7 @@ class DatabaseClient:
             return {"success": False, "message": "WRS refresh is already running"}
             
         self.active_operations["wrs"] = True
+        self.wrs_refresh_result = None
         if self.config_manager:
             self.config_manager._log_audit_event("DB_WRS_REFRESH", "SYSTEM", {"message": "Started WRS full refresh"})
         try:
@@ -229,11 +232,24 @@ class DatabaseClient:
                 try:
                     res = subprocess.run(cmd, cwd=str(self.workspace_root), capture_output=True, text=True)
                     if res.returncode == 0:
+                        self.wrs_refresh_result = {
+                            "success": True,
+                            "message": "WRS import completed successfully"
+                        }
                         self.logger.info("WRS Import completed successfully.")
                     else:
-                        self.logger.error(f"WRS Import failed: {res.stderr}")
+                        detail = (res.stderr or res.stdout or "WRS importer exited with an error").strip()
+                        self.wrs_refresh_result = {
+                            "success": False,
+                            "message": detail[-2000:]
+                        }
+                        self.logger.error(f"WRS Import failed (exit {res.returncode}): {detail}")
                 except Exception as e:
-                    self.logger.error(f"WRS Import exception: {e}")
+                    self.wrs_refresh_result = {
+                        "success": False,
+                        "message": f"WRS Import exception: {e}"
+                    }
+                    self.logger.exception("WRS Import exception")
                 finally:
                     self.active_operations["wrs"] = False
                     

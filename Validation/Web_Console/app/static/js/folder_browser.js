@@ -102,8 +102,8 @@
 
   if (parentBtn) parentBtn.addEventListener("click", () => {
     if (!currentPath) return;
-    const normalized = currentPath.replace(/[\/]$/, "");
-    const parent = normalized.replace(/[\/][^\/]*$/, "") || (currentPath.includes("\") ? currentPath.slice(0, 3) : "/");
+    const normalized = currentPath.replace(/[\\/]$/, "");
+    const parent = normalized.replace(/[\\/][^\\/]*$/, "") || (currentPath.includes("\\") ? currentPath.slice(0, 3) : "/");
     loadDirectory(parent);
   });
 

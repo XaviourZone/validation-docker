@@ -14,6 +14,11 @@ command -v docker >/dev/null 2>&1 || {
 }
 
 cd "$PROJECT_DIR"
-docker compose up -d --no-build --force-recreate
+
+echo "==> Starting existing Validation stack (no build/pull/recreate)..."
+docker compose up -d --no-build
 docker compose ps
+
+echo
 echo "Validation UI: http://localhost:8088"
+echo "Existing runtime state is preserved under: $PROJECT_DIR/runtime"

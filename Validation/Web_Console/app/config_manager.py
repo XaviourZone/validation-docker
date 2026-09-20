@@ -240,6 +240,42 @@ class RouterConfigManager:
             msg = f"Source '{source_name}' successfully {'added' if is_new else 'updated'}. Reload required to apply changes to running Router."
             return True, msg, normalized
 
+    def rename_source(self, old_source_name: str, new_source_name: str) -> Tuple[bool, str]:
+        """Rename a source ID while preserving its complete source configuration."""
+        with self._lock:
+            old_name = str(old_source_name or "").strip()
+            new_name = str(new_source_name or "").strip()
+            raw_cfg = self._read_raw_unlocked()
+            sources = raw_cfg.get("sources", {})
+            if old_name not in sources:
+                return False, f"Source '{old_name}' not found in configuration."
+            if not re.match(r"^[A-Za-z0-9_]+$", new_name):
+                return False, "Source ID contains invalid characters. Use alphanumeric characters and underscores only."
+            if not new_name:
+                return False, "Source ID is required."
+            if new_name in sources and new_name != old_name:
+                return False, f"Source ID '{new_name}' already exists."
+
+            renamed = copy.deepcopy(sources[old_name])
+            raw_cfg["sources"] = {k: v for k, v in sources.items() if k != old_name}
+            raw_cfg["sources"][new_name] = renamed
+
+            try:
+                parsed = parse_raw_dict(raw_cfg)
+                errors = validate_config(parsed)
+                if errors:
+                    return False, f"Cannot rename source: {'; '.join(errors)}"
+                self._atomic_write_unlocked(raw_cfg)
+            except Exception as e:
+                return False, f"Failed to rename source '{old_name}': {str(e)}"
+
+            self._log_audit_event(
+                event="CONFIG_SOURCE_RENAMED",
+                source=new_name,
+                details={"old_source": old_name, "new_source": new_name},
+            )
+            return True, f"Source ID changed from '{old_name}' to '{new_name}'."
+
     def delete_source(self, source_name: str) -> Tuple[bool, str]:
         """Safely delete a source from sources.yaml with validation and atomic backup."""
         with self._lock:

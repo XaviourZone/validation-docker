@@ -43,7 +43,7 @@
     if (modal) delete modal.dataset.logicalPath;
   }
 
-  async function loadDirectory(path) {
+  async function loadDirectory(path, allowRootFallback = true) {
     showError("");
     try {
       const url = path ? browseApi + "?path=" + encodeURIComponent(path) : browseApi;
@@ -65,6 +65,13 @@
       if (data.logical_path !== undefined) modal.dataset.logicalPath = data.logical_path;
       renderEntries(data.entries || []);
     } catch (e) {
+      if (path && allowRootFallback) {
+        currentPath = "";
+        if (modal) delete modal.dataset.logicalPath;
+        await loadDirectory("", false);
+        showError("");
+        return;
+      }
       showError(e.message);
     }
   }

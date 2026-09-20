@@ -31,7 +31,8 @@
     modal.classList.add("open");
     document.body.classList.add("modal-open");
     showError("");
-    loadDirectory(targetInput.value || "");
+    const configured = targetInput.value || "";
+    loadDirectory(configured);
   }
 
   function closeModal() {
@@ -39,6 +40,7 @@
     document.body.classList.remove("modal-open");
     targetInput = null;
     currentPath = "";
+    if (modal) delete modal.dataset.logicalPath;
   }
 
   async function loadDirectory(path) {
@@ -58,8 +60,9 @@
       }
 
       currentPath = data.path || path;
-      if (current) current.textContent = currentPath || "/";
+      if (current) current.textContent = data.logical_path ? "DATA_INFLOW/" + data.logical_path : "DATA_INFLOW";
       if (parentBtn) parentBtn.disabled = !data.parent || data.parent === currentPath;
+      if (data.logical_path !== undefined) modal.dataset.logicalPath = data.logical_path;
       renderEntries(data.entries || []);
     } catch (e) {
       showError(e.message);
@@ -87,6 +90,7 @@
         list.querySelectorAll(".folder-browser-entry.selected").forEach(el => el.classList.remove("selected"));
         row.classList.add("selected");
         row.dataset.path = entry.path;
+        row.dataset.logicalPath = entry.logical_path || "";
       });
       list.appendChild(row);
     });
@@ -111,7 +115,9 @@
 
   if (selectBtn) selectBtn.addEventListener("click", () => {
     const selected = list && list.querySelector(".folder-browser-entry.selected");
-    const value = (selected && selected.dataset.path) || currentPath;
+    const value = (selected && selected.dataset.logicalPath !== undefined)
+      ? selected.dataset.logicalPath
+      : (modal && modal.dataset.logicalPath !== undefined ? modal.dataset.logicalPath : "");
     if (value && targetInput) {
       targetInput.value = value;
       targetInput.dispatchEvent(new Event("input", {bubbles: true}));

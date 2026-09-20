@@ -155,7 +155,7 @@ class DatabaseClient:
                 
                 # Files processed count
                 cur = conn.cursor()
-                cur.execute("SELECT count(*) FROM import_file WHERE status='PROCESSED'")
+                cur.execute("SELECT count(*) FROM import_file WHERE status='COMPLETED'")
                 status["files_processed"] = cur.fetchone()[0]
                 
                 conn.close()

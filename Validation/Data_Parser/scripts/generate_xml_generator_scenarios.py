@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate current XML-generator scenario samples from the canonical model."""
 from pathlib import Path
+import shutil
 import tempfile
 import sys
 
@@ -18,6 +19,7 @@ from Validation.Data_Parser.app.pipeline.xml_generator import XTrackXMLGenerator
 # Keep generated samples under the repository so the operator can always read
 # them without sudo.
 OUT_DIR = ROOT / "Validation" / "Data_Parser" / "generated_samples" / "xml_generator_scenarios"
+LEGACY_OUT = ROOT / "Validation" / "Data_Parser" / "generated_samples" / "xml_generator_samples.txt"
 REFERENCE_ROOT = ROOT / "runtime" / "reference"
 
 
@@ -126,11 +128,13 @@ def enrich_scenario(rec: CommonVesselRecord):
 
 def main():
     gen = XTrackXMLGenerator()
+    # This directory is dedicated to generated scenarios, so rebuild it
+    # completely to prevent stale/old XML samples from being mistaken for
+    # current generator output.
+    shutil.rmtree(OUT_DIR, ignore_errors=True)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Remove only files produced by this scenario generator.
-    for path in OUT_DIR.glob("*.xml"):
-        path.unlink()
+    if LEGACY_OUT.exists():
+        LEGACY_OUT.unlink()
     manifest_lines = [
         "VALIDATION CURRENT XML GENERATOR SCENARIOS",
         "==========================================",

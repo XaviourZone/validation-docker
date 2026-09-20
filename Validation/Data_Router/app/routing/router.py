@@ -1,13 +1,14 @@
 """Routing engine delivering enveloped items to destination parsers with retry and state tracking."""
 
 import logging
+import shutil
 import threading
 import time
 from typing import Any, Dict, List, Optional
 
 from .destination import ParserDestination
 from .route import Route
-from ..config.models import RouterConfig
+from ..config.models import FileSourceConfig, RouterConfig
 from ..logging.logger import log_event
 from ..queue.item import QueueItem, RoutingEnvelope
 from ..queue.manager import BoundedQueueManager
@@ -162,6 +163,43 @@ class RoutingEngine:
         self.connection_manager.disconnect_all()
         self.logger.info("RoutingEngine stopped gracefully")
 
+    def _finalize_file_after_ack(self, item: QueueItem) -> None:
+        """Remove or archive the original file only after parser ACK succeeds."""
+        source_cfg = self.config.sources.get(item.envelope.source)
+        if not isinstance(source_cfg, FileSourceConfig) or source_cfg.preserve_file:
+            return
+        if not self.state_store:
+            self.logger.warning("Cannot finalize source file for %s: router state store is unavailable", item.envelope.filename)
+            return
+
+        state = self.state_store.get_by_message_id(item.envelope.message_id)
+        if not state:
+            self.logger.error("Cannot finalize source file for %s: state record not found", item.envelope.filename)
+            return
+
+        source_path = Path(state.file_path)
+        if not source_path.exists():
+            self.logger.warning("Source file already absent after ACK: %s", source_path)
+            return
+
+        try:
+            processed_folder = str(source_cfg.processed_folder or "").strip()
+            if processed_folder:
+                target_dir = Path(processed_folder)
+                if not target_dir.is_absolute():
+                    target_dir = source_path.parent / target_dir
+                target_dir.mkdir(parents=True, exist_ok=True)
+                target = target_dir / source_path.name
+                if target.exists():
+                    target = target_dir / f"{source_path.stem}_{state.file_hash[:12]}{source_path.suffix}"
+                shutil.move(str(source_path), str(target))
+                self.logger.info("Source file finalized after parser ACK: %s -> %s", source_path, target)
+            else:
+                source_path.unlink()
+                self.logger.info("Source file deleted after parser ACK: %s", source_path)
+        except Exception as exc:
+            self.logger.error("Parser ACK succeeded but source file could not be finalized: %s: %s", source_path, exc)
+
     def _delivery_worker_loop(self) -> None:
         """Worker thread loop consuming queue and dispatching to parsers."""
         while not self._stop_event.is_set():
@@ -203,6 +241,7 @@ class RoutingEngine:
             if self.state_store and item.envelope.input_type == "FILE":
                 self.state_store.update_status(msg_id, FileState.ACKNOWLEDGED)
                 self.state_store.update_status(msg_id, FileState.PROCESSED)
+                self._finalize_file_after_ack(item)
 
             if self.metrics_collector:
                 self.metrics_collector.record_acknowledged(source)

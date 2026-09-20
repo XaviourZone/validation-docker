@@ -21,6 +21,22 @@ class TestXMLContract(unittest.TestCase):
         self.assertEqual(normalize_type_and_cargo(70), "CARGO SHIP")
         self.assertEqual(normalize_type_and_cargo(80), "TANKER")
 
+    def test_empty_string_fields_are_omitted(self):
+        rec = CommonVesselRecord(
+            source="SAIS_IOR",
+            message_id="empty-field",
+            record_id="empty-field:1",
+            timestamp="2026-09-18T10:00:00Z",
+            mmsi=419697000,
+            vessel_name="",
+            callsign="   ",
+        )
+        norm = normalize_from_common_record(rec, receipt_time_ms=1778752800000)
+        xml = XTrackXMLGenerator().generate_document(norm)
+        self.assertNotIn("<id>vessel.name</id>", xml)
+        self.assertNotIn("<id>id.callsign</id>", xml)
+        XTrackXMLGenerator.validate_document(xml)
+
     def test_one_record_one_xtrack_and_41_tag_membership(self):
         rec = CommonVesselRecord(
             source="SAIS_IOR",

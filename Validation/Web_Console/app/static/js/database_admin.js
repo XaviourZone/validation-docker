@@ -193,29 +193,6 @@
     throw new Error("WRS refresh is still running after 10 minutes. Check the WRS status before trying again.");
   }
 
-  async function waitForPansTables() {
-    const started = Date.now();
-    const timeout = 5 * 60 * 1000;
-    while (Date.now() - started < timeout) {
-      try {
-        const status = await requestJson("/api/database/status");
-        const pans = status.pans || {};
-        if (Number(pans.table_count || 0) > 0 && Number(pans.row_count || 0) > 0) {
-          if (window.consoleApp?.refresh) window.consoleApp.refresh();
-          return pans;
-        }
-        if (window.consoleApp?.showLoading) {
-          window.consoleApp.showLoading(
-            "Loading PANS",
-            "PANS folder is configured. The live importer is loading XML data into pans.db…"
-          );
-        }
-      } catch (_) {}
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-    throw new Error("PANS folder was configured, but no PANS records appeared in the database within 5 minutes. Check the PANS importer status and XML files.");
-  }
-
   async function updatePansFolder() {
     const button = byId("btn-pans-save-folder");
     if (button?.disabled) return;
@@ -227,7 +204,7 @@
     if (window.consoleApp?.showLoading) {
       window.consoleApp.showLoading(
         "Loading PANS",
-        "Uploading the selected XML folder and waiting for the live PANS importer…"
+        "Uploading the selected XML folder and configuring the live PANS importer…"
       );
     }
     setBusy("btn-pans-save-folder", true, "Loading…");
@@ -235,9 +212,15 @@
     try {
       const data = await uploadFolder("pans");
       if (!data) return;
-      setFeedback("db-pans-feedback", "PANS folder configured. Waiting for XML records to appear in pans.db…", "warning");
-      await waitForPansTables();
-      setFeedback("db-pans-feedback", "PANS data is loaded and available in the data viewer below.", "success");
+
+      // PANS is a live importer. Once the folder is uploaded and configured,
+      // return control to the operator. The importer continues in the background.
+      setFeedback(
+        "db-pans-feedback",
+        "PANS folder loaded. The live importer is processing the XML files in the background.",
+        "success"
+      );
+      if (window.consoleApp?.refresh) window.consoleApp.refresh();
     } catch (error) {
       setFeedback("db-pans-feedback", error.message, "error");
     } finally {
@@ -246,6 +229,7 @@
       if (window.consoleApp?.refresh) window.consoleApp.refresh();
     }
   }
+
 
   async function updateWrs() {
     const button = byId("btn-wrs-update");

@@ -232,7 +232,7 @@ class VesselEnricher:
             rec.id_callsign = ref_value("id.callsign", "callsign")
 
         if not rec.id_imo or not is_valid_imo(rec.id_imo):
-            for source in ref_order:
+            for source in ref_order_for("id.imo"):
                 value = getattr(ctx, f"{source.lower()}_imo", None)
                 if value and is_valid_imo(value):
                     rec.id_imo = value
@@ -242,7 +242,7 @@ class VesselEnricher:
             # PANS/NSC store descriptive vessel type text; WRS also has a
             # numeric AIS type decode. Prefer the first available source and
             # retain the existing WRS numeric decode as the WRS fallback.
-            for source in ref_order:
+            for source in ref_order_for("ais.typeAndCargo"):
                 if source == "PANS" and ctx.pans_vessel_type:
                     rec.ais_typeAndCargo = ctx.pans_vessel_type
                 elif source == "NSC" and ctx.nsc_type:
@@ -274,9 +274,9 @@ class VesselEnricher:
             # iTrackLib contract uses numeric identity categories: Friend=1, Neutral=3, Suspect=4.
             rec.cat_identity = 1 if score < 300 else (4 if score > 600 else 3)
 
-        # Voyage fields exist in PANS and WRS; NSC has no voyage columns.
-        # Preserve incoming AIS first, then use the selected MMSI reference
-        # source, followed by the remaining reference sources.
+        # Voyage fallback policy is NSC -> PANS -> WRS. The current NSC schema
+        # has no voyage columns, so populated voyage values currently come from
+        # PANS and then WRS calling data. Incoming values remain authoritative.
         voyage_fields = {
             "voyage_destination": {
                 "PANS": ("pans_berman_dest", "pans_npc"),

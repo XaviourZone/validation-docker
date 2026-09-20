@@ -113,6 +113,7 @@ class VesselEnricher:
         incoming_imo = rec.id_imo
         incoming_name = rec.vessel_name
         incoming_callsign = rec.id_callsign
+        incoming_values = {attr: getattr(rec, attr, None) for attr in LOGICAL_TO_ATTR.values()}
 
         ctx: VesselContext = self.ref_db.resolve(mmsi=incoming_mmsi, imo=incoming_imo, callsign=incoming_callsign, vessel_name=incoming_name)
         self._apply_configured_mapping(rec, ctx)
@@ -352,4 +353,51 @@ class VesselEnricher:
                 seen.add(remark)
                 deduped.append(remark)
         rec.vessel_remarks = " | ".join(deduped)
+
+        # Preserve field-level provenance for acceptance/audit tooling. This is
+        # metadata only and does not alter the canonical XML values.
+        reference_candidates = {
+            "ais.typeAndCargo": {
+                "PANS": ("pans_vessel_type",), "NSC": ("nsc_type",),
+                "WRS": ("wrs_ais_type_code", "wrs_vessel_type"),
+            },
+            "cat.annotation": {"WRS": ("wrs_status_decode",)},
+            "cat.identity": {"WRS": ("wrs_vigilance_score",)},
+            "foreign.track.number": {"PANS": ("pans_mmsi",), "NSC": ("nsc_mmsi",), "WRS": ("wrs_mmsi",)},
+            "id.callsign": {"PANS": ("pans_callsign",), "NSC": ("nsc_callsign",), "WRS": ("wrs_callsign",)},
+            "id.imo": {"PANS": ("pans_imo",), "NSC": ("nsc_imo",), "WRS": ("wrs_imo",)},
+            "id.mmsi.destination": {"WRS": ("wrs_vigilance_score",)},
+            "vessel.beam": {"PANS": ("pans_breadth", "pans_beam"), "WRS": ("wrs_breadth", "wrs_beam")},
+            "vessel.description": {"PANS": ("pans_vessel_type",), "NSC": ("nsc_type",), "WRS": ("wrs_vessel_type",)},
+            "vessel.draft": {"PANS": ("pans_draft", "pans_max_draft"), "WRS": ("wrs_draft", "wrs_max_draft")},
+            "vessel.grosstonnage": {"PANS": ("pans_grt",), "WRS": ("wrs_gross", "wrs_grt")},
+            "vessel.length": {"PANS": ("pans_loa",), "WRS": ("wrs_loa",)},
+            "vessel.name": {"PANS": ("pans_vessel_name",), "NSC": ("nsc_vessel_name",), "WRS": ("wrs_vessel_name",)},
+            "voyage.arrival": {"PANS": ("pans_berman_eta",), "WRS": ("wrs_calling_arrival",)},
+            "voyage.departure": {"PANS": ("pans_lpc", "pans_berman_lpc"), "WRS": ("wrs_calling_sailing",)},
+            "voyage.destination": {"PANS": ("pans_berman_dest", "pans_npc"), "WRS": ("wrs_calling_place",)},
+            "voyage.eta": {"PANS": ("pans_eta", "pans_berman_eta")},
+            "voyage.etd": {"PANS": ("pans_etd", "pans_berman_etd")},
+            "voyage.origin": {"PANS": ("pans_org_dep",), "WRS": ("wrs_calling_place",)},
+        }
+        provenance = {}
+        for logical, attr in LOGICAL_TO_ATTR.items():
+            value = getattr(rec, attr, None)
+            if value in (None, ""):
+                provenance[logical] = "NONE"
+                continue
+            if incoming_values.get(attr) not in (None, ""):
+                provenance[logical] = "INCOMING"
+                continue
+            matched_source = None
+            for source in ("PANS", "NSC", "WRS"):
+                for field in reference_candidates.get(logical, {}).get(source, ()):
+                    ref_value = getattr(ctx, field, None)
+                    if ref_value not in (None, "") and str(value) == str(ref_value):
+                        matched_source = source
+                        break
+                if matched_source:
+                    break
+            provenance[logical] = matched_source or "DERIVED"
+        rec.raw_attributes["enrichment_provenance"] = provenance
         return rec

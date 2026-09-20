@@ -455,6 +455,18 @@ def main():
         print(f"DUMMY REFERENCE ROOT: {REFERENCE_ROOT}")
 
     reference_anchor = discover_reference_anchor()
+    if reference_anchor:
+        manifest_lines.append(
+            "REFERENCE ANCHOR: "
+            f"MMSI={reference_anchor.get('mmsi')} "
+            f"IMO={reference_anchor.get('imo')} "
+            f"CALLSIGN={reference_anchor.get('callsign')} "
+            f"NAME={reference_anchor.get('vessel_name')} "
+            f"ORIGIN={reference_anchor.get('origin')} "
+            f"SOURCES={reference_anchor.get('matched_sources')} "
+            f"SCORE={reference_anchor.get('score')}"
+        )
+        manifest_lines.append("")
     total = 0
     for feed, rows in scenarios(reference_anchor):
         feed_dir = OUT_DIR / feed

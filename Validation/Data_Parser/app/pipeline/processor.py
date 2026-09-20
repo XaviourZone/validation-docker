@@ -171,6 +171,8 @@ class PipelineProcessor:
                         eta=str(enr.voyage_eta or ""),
                         length=enr.vessel_length,
                         width=enr.vessel_beam,
+                        raw_payload=enr.raw_attributes.get("raw_payload"),
+                        raw_attributes=dict(enr.raw_attributes or {}),
                     )
                 )
             except Exception as exc:

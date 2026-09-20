@@ -59,6 +59,7 @@ services:
     restart: unless-stopped
     command: ["python", "-m", "Validation.Database.PANS.importer.pans_importer", "--config", "/opt/validation/docker/database.yaml"]
     volumes:
+      - ./docker:/opt/validation/docker
       - ./runtime/reference:/opt/validation/runtime/reference
       - ${VALIDATION_OPERATOR_DATA_ROOT:-./runtime/reference}:/opt/validation/operator-data
 

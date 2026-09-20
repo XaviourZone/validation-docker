@@ -56,14 +56,14 @@ class TestSemanticAudit(unittest.TestCase):
             try:
                 conn.execute(
                     "CREATE TABLE nsc_vessels ("
-                    "ID_MMSI TEXT, ID_IMO TEXT, ID_CALLSIGN TEXT, "
+                    "SOURCE_REGION TEXT, ID_MMSI TEXT, ID_IMO TEXT, ID_CALLSIGN TEXT, "
                     "VESSEL_NAME TEXT, TYPE TEXT)"
                 )
                 conn.execute(
                     "INSERT INTO nsc_vessels "
-                    "(ID_MMSI, ID_IMO, ID_CALLSIGN, VESSEL_NAME, TYPE) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    ("419697000", "8407979", "SAGA", "SAGA", "VESSEL"),
+                    "(SOURCE_REGION, ID_MMSI, ID_IMO, ID_CALLSIGN, VESSEL_NAME, TYPE) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    ("EAST", "419697000", "8407979", "SAGA", "SAGA", "VESSEL"),
                 )
                 conn.commit()
             finally:

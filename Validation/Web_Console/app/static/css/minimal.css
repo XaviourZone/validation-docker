@@ -456,3 +456,95 @@ html,body{
 
 
 .src-id-editor{display:flex;align-items:center;gap:5px;min-width:0}.src-id-input{width:100%;min-width:0;background:var(--panel-bg,#10151d);border:1px solid var(--border-color);border-radius:5px;color:var(--text-primary);padding:5px 7px;font-family:inherit;font-size:12px}.src-id-save{height:28px;padding:0 7px;border:1px solid var(--border-color);border-radius:5px;background:var(--panel-bg,#10151d);color:var(--text-primary);cursor:pointer;font-size:11px}.src-id-save:hover{border-color:var(--accent-blue);color:var(--accent-blue)}
+
+
+/* --------------------------------------------------------------------------
+   Data Router — Apple-inspired dashboard layout.
+   Visual-only layer: existing controls, IDs and data contracts are preserved.
+   -------------------------------------------------------------------------- */
+#view-router{max-width:1540px;margin:0 auto;padding-bottom:24px}
+.router-hero-card{
+  min-height:132px;margin-bottom:16px;padding:24px 26px;
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  border:1px solid rgba(255,255,255,.11);border-radius:22px;
+  background:
+    radial-gradient(circle at 78% 35%,rgba(10,132,255,.18),transparent 32%),
+    linear-gradient(135deg,rgba(31,49,72,.82),rgba(15,21,31,.74));
+  box-shadow:0 20px 65px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.07);
+  overflow:hidden;position:relative;
+}
+.router-hero-card:after{
+  content:"";position:absolute;width:280px;height:280px;right:-90px;bottom:-180px;
+  border-radius:50%;background:rgba(10,132,255,.12);filter:blur(12px);pointer-events:none
+}
+.router-hero-copy{position:relative;z-index:1}
+.router-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:700;color:#72b9ff;margin-bottom:6px}
+.router-hero-copy h2{font-size:30px!important;line-height:1.08;letter-spacing:-.045em;margin:0!important}
+.router-hero-copy p{margin:7px 0 0;color:#aab8ca;font-size:13px}
+.router-hero-actions{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+.router-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.router-kpi-card{
+  min-height:100px;padding:18px;display:flex;align-items:center;gap:13px;
+  border:1px solid rgba(255,255,255,.09);border-radius:17px;
+  background:linear-gradient(145deg,rgba(28,35,47,.76),rgba(15,19,27,.67));
+  box-shadow:0 14px 45px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.045);
+}
+.router-kpi-icon{
+  width:42px;height:42px;border-radius:13px;display:grid;place-items:center;
+  font-size:19px;font-weight:700;flex:0 0 42px;
+  border:1px solid rgba(255,255,255,.08);box-shadow:inset 0 1px 0 rgba(255,255,255,.09)
+}
+.router-kpi-blue{background:rgba(10,132,255,.18);color:#69b5ff}
+.router-kpi-purple{background:rgba(123,92,255,.18);color:#a992ff}
+.router-kpi-green{background:rgba(52,211,153,.16);color:#64e5b1}
+.router-kpi-red{background:rgba(244,63,94,.15);color:#ff7f92}
+.router-main-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.router-sources-panel{margin-bottom:0!important;min-width:0}
+.router-sources-header{min-height:74px!important;padding:14px 18px!important}
+.router-section-title{font-size:18px;font-weight:700;letter-spacing:-.025em}
+.router-section-subtitle{margin-top:3px;color:#7f8b9c;font-size:10px}
+.router-side-stack{display:flex;flex-direction:column;gap:16px}
+.router-side-card{
+  border:1px solid rgba(255,255,255,.09);border-radius:17px;padding:18px;
+  background:linear-gradient(145deg,rgba(28,35,47,.74),rgba(15,19,27,.66));
+  box-shadow:0 16px 50px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.045)
+}
+.router-side-header{display:flex;justify-content:space-between;align-items:flex-start}
+.router-side-title{font-size:15px;font-weight:700;letter-spacing:-.015em}
+.router-side-subtitle{margin-top:3px;color:#7f8b9c;font-size:10px}
+.router-live-dot{width:9px;height:9px;border-radius:50%;background:#34d399;box-shadow:0 0 12px rgba(52,211,153,.7);margin-top:5px}
+.router-status-big{margin:20px 0 16px;font-size:22px;font-weight:700;letter-spacing:-.035em;color:#f4f7fb}
+.router-side-stat{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid rgba(255,255,255,.065);font-size:11px}
+.router-side-stat span{color:#8793a3}.router-side-stat strong{color:#eef3f8;font-family:var(--font-mono);font-size:12px}
+.router-actions-card{padding:12px}
+.router-actions-card>.router-side-title{padding:6px 7px 10px}
+.router-action-row{
+  width:100%;border:0;border-top:1px solid rgba(255,255,255,.065);background:transparent;color:#e8edf4;
+  display:grid;grid-template-columns:38px minmax(0,1fr) 16px;gap:10px;align-items:center;text-align:left;
+  padding:12px 7px;border-radius:10px;cursor:pointer
+}
+.router-action-row:hover{background:rgba(255,255,255,.045)}
+.router-action-row strong{display:block;font-size:11px}.router-action-row small{display:block;margin-top:2px;color:#778395;font-size:9px}
+.router-action-row>span:last-child{font-size:19px;color:#667487}
+.router-action-icon{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;background:rgba(10,132,255,.14);color:#66b4ff;font-size:17px}
+#view-router .sources-table{min-width:0!important}
+#view-router .sources-table td,#view-router .sources-table th{padding-left:12px!important;padding-right:12px!important}
+#view-router .src-id-editor{max-width:190px}
+#view-router .src-id-input{font-size:11px}
+#view-router .src-id-save{font-size:10px}
+@media(max-width:1120px){
+  .router-main-grid{grid-template-columns:1fr}
+  .router-side-stack{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:850px){
+  .router-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .router-hero-card{align-items:flex-start;flex-direction:column}
+  .router-hero-actions{width:100%;justify-content:flex-end}
+  .router-side-stack{grid-template-columns:1fr}
+}
+@media(max-width:620px){
+  .router-kpi-grid{grid-template-columns:1fr}
+  .router-hero-copy h2{font-size:25px!important}
+  .router-hero-actions{flex-wrap:wrap;justify-content:flex-start}
+  #view-router .sources-table{min-width:720px!important}
+}

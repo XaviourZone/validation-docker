@@ -59,6 +59,9 @@ class XTrackXMLGenerator:
     def _format_value(cls, val_tag: str, value: Any) -> Optional[str]:
         if value is None:
             return None
+        # Missing string fields must be omitted, not emitted as empty <sv></sv>.
+        if isinstance(value, str) and not value.strip():
+            return None
         if val_tag == "bv":
             return "true" if bool(value) else "false"
         if val_tag == "tv":

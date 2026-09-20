@@ -2,6 +2,7 @@
 """Generate current XML-generator scenario samples from the canonical model."""
 from pathlib import Path
 import shutil
+import sqlite3
 import tempfile
 import sys
 
@@ -41,8 +42,8 @@ def make_record(source: str, n: int, **kw) -> CommonVesselRecord:
         **kw,
     )
 
-def scenarios():
-    return [
+def scenarios(reference_anchor=None):
+    rows = [
         ("SAIS_IOR", [
             make_record("SAIS_IOR",1,mmsi=477900700,latitude=0.36008502,longitude=1.87239091,sog=5.0,cog=1.2,true_heading=1.2,app_message_id=1,assumption="REAL acceptance sample basis: MMSI 477900700 and position. Remaining values are assumed."),
             make_record("SAIS_IOR",2,mmsi=477900700,vessel_name="IOR SAMPLE VESSEL",latitude=0.3601,longitude=1.8724,sog=4.2,cog=1.3,true_heading=1.3,app_message_id=1,assumption="Scenario based on real MMSI; vessel name and kinematics assumed."),
@@ -94,6 +95,50 @@ def scenarios():
         ]),
     ]
 
+    # Replace the last two scenarios with identities discovered from the
+    # currently loaded reference databases.  This keeps the generated samples
+    # useful for proving real WRS/PANS/NSC enrichment instead of relying only
+    # on assumed MMSIs that may not exist in the operator databases.
+    if reference_anchor:
+        anchor = reference_anchor
+        for feed, feed_rows in rows:
+            base_lat = 0.4100
+            base_lon = 1.5100
+            feed_rows[-2] = make_record(
+                feed,
+                4,
+                mmsi=anchor.get("mmsi"),
+                imo=anchor.get("imo"),
+                vessel_name=None,
+                callsign=anchor.get("callsign"),
+                latitude=base_lat,
+                longitude=base_lon,
+                app_message_id=1,
+                assumption=(
+                    "REFERENCE-BACKED scenario: identity discovered from the active "
+                    "WRS/PANS/NSC databases; incoming vessel name intentionally missing "
+                    "to exercise reference fallback and intelligence remarks."
+                ),
+            )
+            feed_rows[-1] = make_record(
+                feed,
+                5,
+                mmsi=anchor.get("mmsi"),
+                imo=anchor.get("imo"),
+                vessel_name="TRANSMITTED SCENARIO NAME",
+                callsign=anchor.get("callsign"),
+                latitude=base_lat + 0.0001,
+                longitude=base_lon + 0.0001,
+                app_message_id=1,
+                assumption=(
+                    "REFERENCE-BACKED conflict scenario: the active reference identity "
+                    "is known, while an incoming vessel name is supplied; incoming "
+                    "identity must remain authoritative."
+                ),
+            )
+
+    return rows
+
 def _reference_path(name: str) -> Path:
     candidates = [
         REFERENCE_ROOT / f"{name.lower()}.db",
@@ -104,6 +149,156 @@ def _reference_path(name: str) -> Path:
             return path
     return candidates[0]
 
+
+
+def _db_candidates(path: Path, query: str):
+    """Read a small candidate set from one active reference DB."""
+    if not path.exists():
+        return []
+    try:
+        conn = sqlite3.connect(str(path))
+        conn.row_factory = sqlite3.Row
+        try:
+            return [dict(row) for row in conn.execute(query).fetchall()]
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return []
+
+
+def discover_reference_anchor():
+    """Find one real identity that resolves across the available references.
+
+    Selection is based on the live SQLite contents. No operator/reference DB is
+    modified. The candidate is scored by actual WRS/PANS/NSC matches and by the
+    presence of the intelligence fields used in VesselEnricher.vessel_remarks.
+    """
+    candidate_rows = []
+
+    candidate_rows.extend(
+        _db_candidates(
+            _reference_path("WRS"),
+            "SELECT MMSI AS mmsi, IMO AS imo, VESSEL_NAME AS vessel_name, "
+            "CALL_SIGN AS callsign FROM wrs_datasets_vessels "
+            "WHERE (MMSI IS NOT NULL AND MMSI <> '') OR (IMO IS NOT NULL AND IMO <> '') "
+            "LIMIT 300",
+        )
+    )
+    candidate_rows.extend(
+        _db_candidates(
+            _reference_path("PANS"),
+            "SELECT MMSINumber AS mmsi, IMONumber AS imo, VesselName AS vessel_name, "
+            "CallSign AS callsign FROM pans_vespro "
+            "WHERE (MMSINumber IS NOT NULL AND MMSINumber <> '') OR "
+            "(IMONumber IS NOT NULL AND IMONumber <> '') LIMIT 300",
+        )
+    )
+    candidate_rows.extend(
+        _db_candidates(
+            _reference_path("NSC"),
+            "SELECT ID_MMSI AS mmsi, ID_IMO AS imo, VESSEL_NAME AS vessel_name, "
+            "ID_CALLSIGN AS callsign FROM nsc_vessels "
+            "WHERE (ID_MMSI IS NOT NULL AND ID_MMSI <> '') OR "
+            "(ID_IMO IS NOT NULL AND ID_IMO <> '') LIMIT 300",
+        )
+    )
+
+    # Deduplicate candidate identities before resolving them.
+    unique = {}
+    for row in candidate_rows:
+        def clean(value):
+            if value in (None, ""):
+                return None
+            return str(value).strip()
+
+        key = (
+            clean(row.get("mmsi")),
+            clean(row.get("imo")),
+            (clean(row.get("callsign")) or "").upper(),
+            (clean(row.get("vessel_name")) or "").upper(),
+        )
+        unique[key] = {
+            "mmsi": clean(row.get("mmsi")),
+            "imo": clean(row.get("imo")),
+            "callsign": clean(row.get("callsign")),
+            "vessel_name": clean(row.get("vessel_name")),
+        }
+
+    ref_db = ReferenceDB(
+        wrs_path=_reference_path("WRS"),
+        pans_path=_reference_path("PANS"),
+        nsc_path=_reference_path("NSC"),
+    )
+    best = None
+    best_score = -1
+    try:
+        for candidate in unique.values():
+            try:
+                mmsi = int(float(candidate["mmsi"])) if candidate["mmsi"] else None
+            except (TypeError, ValueError):
+                mmsi = None
+            try:
+                imo = int(float(candidate["imo"])) if candidate["imo"] else None
+            except (TypeError, ValueError):
+                imo = None
+
+            ctx = ref_db.resolve(
+                mmsi=mmsi,
+                imo=imo,
+                callsign=candidate["callsign"],
+                vessel_name=candidate["vessel_name"],
+            )
+            matched = sum(
+                1 for flag in (ctx.wrs_matched, ctx.pans_matched, ctx.nsc_matched)
+                if flag
+            )
+            if not matched:
+                continue
+
+            score = matched * 100
+            if ctx.wrs_vigilance_score is not None:
+                score += 10
+            if ctx.wrs_ais_spoofing_detail:
+                score += 8
+            if ctx.wrs_ais_gap_detail:
+                score += 8
+            if ctx.wrs_sanctions_detail:
+                score += 8
+            if ctx.pans_vcn or ctx.pans_berman_dest or ctx.pans_npc:
+                score += 8
+            if ctx.pans_cargo_description or ctx.pans_cargo_tonnage is not None:
+                score += 8
+            if ctx.nsc_region or ctx.nsc_begin_date or ctx.nsc_end_date:
+                score += 4
+
+            if score > best_score:
+                best_score = score
+                best = {
+                    "mmsi": mmsi,
+                    "imo": imo,
+                    "callsign": candidate["callsign"],
+                    "vessel_name": candidate["vessel_name"],
+                    "matched_sources": {
+                        "WRS": ctx.wrs_matched,
+                        "PANS": ctx.pans_matched,
+                        "NSC": ctx.nsc_matched,
+                    },
+                    "score": score,
+                }
+    finally:
+        ref_db.close()
+
+    if best:
+        print(
+            "REFERENCE ANCHOR: "
+            f"MMSI={best['mmsi']} IMO={best['imo']} "
+            f"CALLSIGN={best['callsign']} NAME={best['vessel_name']} "
+            f"SOURCES={best['matched_sources']} SCORE={best['score']}"
+        )
+    else:
+        print("REFERENCE ANCHOR: none found; retained assumption-only scenarios")
+
+    return best
 
 def enrich_scenario(rec: CommonVesselRecord):
     """Run the same reference-enrichment stage used by the live processor.
@@ -141,12 +336,14 @@ def main():
         "Each XML is generated by the current normalizer + VesselEnricher + XTrackXMLGenerator.",
         "Old Sample_xmls XML is NOT copied.",
         "Reference enrichment uses the current WRS/PANS/NSC SQLite databases when available.",
+        "Scenarios 04/05 use a dynamically discovered reference-backed identity when one exists.",
         "Each scenario uses an isolated temporary TrackStateDB; operator state is not modified.",
         "",
     ]
 
+    reference_anchor = discover_reference_anchor()
     total = 0
-    for feed, rows in scenarios():
+    for feed, rows in scenarios(reference_anchor):
         feed_dir = OUT_DIR / feed
         feed_dir.mkdir(parents=True, exist_ok=True)
         for idx, rec in enumerate(rows, 1):

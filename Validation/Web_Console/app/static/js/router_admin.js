@@ -28,40 +28,6 @@
     const patterns=document.getElementById("src-patterns"); if(patterns){const h=patterns.parentElement?.querySelector(".form-hint");if(h)h.textContent="Choose the files to process.";}
   }
 
-  function ensureBrowseButton(){
-    const folder=document.getElementById("src-folder"); if(!folder)return;
-    let button=document.getElementById("router-browse-folder");
-    if(!button){
-      button=document.createElement("button");button.type="button";button.id="router-browse-folder";button.className="btn btn-secondary";button.textContent="Browse…";button.style.cssText="margin-top:6px;";
-      folder.parentElement?.appendChild(button);
-    }
-    button.onclick=()=>openFolderBrowser(folder);
-  }
-
-  function openFolderBrowser(target){
-    const old=document.getElementById("router-folder-browser");if(old)old.remove();
-    const modal=document.createElement("div");modal.id="router-folder-browser";modal.className="modal-backdrop open";modal.style.zIndex="10050";
-    modal.innerHTML=`<div class="modal-container" style="max-width:760px;"><div class="modal-header"><div class="modal-title">Select input folder</div><button class="modal-close-btn" id="rfb-close">✕</button></div><div class="modal-body"><div class="form-group"><label class="form-label">Selected folder</label><input id="rfb-path" class="form-input" readonly></div><div style="display:flex;gap:8px;margin-bottom:10px;"><button class="btn btn-secondary" id="rfb-up">Up</button><button class="btn btn-primary" id="rfb-select">Select folder</button></div><div id="rfb-list" style="max-height:430px;overflow:auto;border:1px solid var(--border-color);border-radius:4px;"></div><div id="rfb-error" style="color:var(--accent-rose);margin-top:8px;"></div></div></div>`;
-    document.body.appendChild(modal);
-    const pathEl=document.getElementById("rfb-path"),list=document.getElementById("rfb-list"),err=document.getElementById("rfb-error");
-    document.getElementById("rfb-close").onclick=()=>modal.remove();
-    document.getElementById("rfb-select").onclick=()=>{if(pathEl.value){target.value=pathEl.value;target.dispatchEvent(new Event("input",{bubbles:true}));target.dispatchEvent(new Event("change",{bubbles:true}));}modal.remove();};
-    document.getElementById("rfb-up").onclick=async()=>{const p=pathEl.value;if(!p)return;const d=await browse(p);if(d.parent&&d.parent!==p)await browse(d.parent);};
-    browse("");
-    async function browse(path){
-      try{
-        const d=await api(path?"/api/router/filesystem/browse?path="+encodeURIComponent(path):"/api/router/filesystem/browse");
-        if(d.roots){pathEl.value="";render(d.roots);}else{pathEl.value=d.path||"";render(d.entries||[]);}
-        err.textContent="";return d;
-      }catch(e){err.textContent=e.message;list.innerHTML="";return {};}
-    }
-    function render(entries){
-      list.innerHTML="";
-      if(!entries.length){list.innerHTML='<div style="padding:12px;color:var(--text-muted)">No readable folders</div>';return;}
-      entries.forEach(e=>{const b=document.createElement("button");b.type="button";b.className="btn btn-secondary";b.style.cssText="display:block;width:100%;text-align:left;margin:3px 0";b.disabled=e.readable===false;b.textContent="📁 "+e.name;b.onclick=()=>browse(e.path);list.appendChild(b);});
-    }
-  }
-
   function installMappingPanel(){
     const parserView=document.getElementById("view-parser"); if(!parserView||document.getElementById("btn-parser-mapping"))return;
     const holder=document.createElement("div");holder.style.cssText="margin:0 0 14px;display:flex;justify-content:flex-end;";
@@ -86,6 +52,6 @@
     document.getElementById("pm-save").onclick=async()=>{const fields={};document.querySelectorAll(".pm-candidate").forEach(i=>{const v=i.value.trim();fields[i.dataset.field]=fields[i.dataset.field]||[];if(v)fields[i.dataset.field].push(v);});try{await api("/api/parser/mapping/save",{method:"POST",body:JSON.stringify({parser:sel.value,mapping:{format:"auto",fields}})});modal.remove();alert("Parser mapping saved.");}catch(e){alert(e.message);}};
   }
 
-  function boot(){installFetchReload();simplifySourceForm();ensureBrowseButton();installMappingPanel();setTimeout(()=>{simplifySourceForm();ensureBrowseButton();installMappingPanel();},500);}
+  function boot(){installFetchReload();simplifySourceForm();installMappingPanel();setTimeout(()=>{simplifySourceForm();installMappingPanel();},500);}
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot);else boot();
 })();

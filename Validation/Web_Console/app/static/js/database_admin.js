@@ -228,7 +228,109 @@
     }
   }
 
+  const tableViewerState = {db: "", table: "", offset: 0, limit: 50, total: 0};
+
+  async function openTableData(db, table, offset = 0) {
+    if (!db || !table) return;
+    tableViewerState.db = db;
+    tableViewerState.table = table;
+    tableViewerState.offset = offset;
+
+    const modal = byId("database-table-modal");
+    const title = byId("database-table-title");
+    const meta = byId("database-table-meta");
+    const tableEl = byId("database-table-view");
+    const empty = byId("database-table-empty");
+    const pageEl = byId("database-table-page");
+    const prev = byId("database-table-prev");
+    const next = byId("database-table-next");
+
+    if (!modal || !tableEl) return;
+    if (title) title.textContent = db + " / " + table;
+    modal.classList.add("open");
+    document.body.classList.add("modal-open");
+    if (meta) meta.textContent = "Loading…";
+    if (empty) empty.style.display = "none";
+    if (tableEl.querySelector("thead")) tableEl.querySelector("thead").innerHTML = "";
+    if (tableEl.querySelector("tbody")) tableEl.querySelector("tbody").innerHTML = "";
+
+    try {
+      const data = await requestJson(
+        "/api/database/table?db=" + encodeURIComponent(db.toLowerCase()) +
+        "&table=" + encodeURIComponent(table) +
+        "&limit=" + tableViewerState.limit +
+        "&offset=" + tableViewerState.offset
+      );
+      tableViewerState.total = Number(data.total || 0);
+
+      const thead = tableEl.querySelector("thead");
+      const tbody = tableEl.querySelector("tbody");
+      const columns = data.columns || [];
+      if (thead) {
+        thead.innerHTML = "<tr>" + columns.map((col) => "<th></th>").join("") + "</tr>";
+        [...thead.querySelectorAll("th")].forEach((th, i) => { th.textContent = columns[i]; });
+      }
+
+      if (tbody) {
+        tbody.innerHTML = "";
+        (data.rows || []).forEach((row) => {
+          const tr = document.createElement("tr");
+          columns.forEach((col) => {
+            const td = document.createElement("td");
+            td.style.fontFamily = "var(--font-mono)";
+            td.style.fontSize = "11px";
+            const value = row[col];
+            td.textContent = value === null || value === undefined ? "" : String(value);
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+      }
+
+      if (empty) empty.style.display = data.rows && data.rows.length ? "none" : "block";
+      const first = tableViewerState.total ? tableViewerState.offset + 1 : 0;
+      const last = Math.min(tableViewerState.offset + tableViewerState.limit, tableViewerState.total);
+      if (meta) meta.textContent = "Rows " + first.toLocaleString() + "–" + last.toLocaleString() + " of " + tableViewerState.total.toLocaleString();
+      if (pageEl) pageEl.textContent = "Page " + (Math.floor(tableViewerState.offset / tableViewerState.limit) + 1);
+      if (prev) prev.disabled = tableViewerState.offset <= 0;
+      if (next) next.disabled = tableViewerState.offset + tableViewerState.limit >= tableViewerState.total;
+    } catch (error) {
+      if (meta) meta.textContent = "Unable to load table: " + error.message;
+      if (empty) {
+        empty.textContent = "Unable to load table data.";
+        empty.style.display = "block";
+      }
+    }
+  }
+
+  function closeTableData() {
+    const modal = byId("database-table-modal");
+    if (modal) modal.classList.remove("open");
+    document.body.classList.remove("modal-open");
+  }
+
+  function initTableViewer() {
+    byId("btn-db-view-data")?.addEventListener("click", () => {
+      const selected = byId("db-view-table")?.value || "";
+      if (!selected) {
+        setFeedback("db-nsc-feedback", "Select a database table first.", "error");
+        return;
+      }
+      const parts = selected.split("|");
+      openTableData(parts[0], parts.slice(1).join("|"));
+    });
+
+    byId("database-table-close")?.addEventListener("click", closeTableData);
+    byId("database-table-prev")?.addEventListener("click", () => {
+      openTableData(tableViewerState.db, tableViewerState.table, Math.max(0, tableViewerState.offset - tableViewerState.limit));
+    });
+    byId("database-table-next")?.addEventListener("click", () => {
+      openTableData(tableViewerState.db, tableViewerState.table, tableViewerState.offset + tableViewerState.limit);
+    });
+  }
+
   function init() {
+    initTableViewer();
     loadReferenceConfigs();
 
     byId("btn-wrs-browse")?.addEventListener("click", () => openNativeFolderPicker("wrs"));
@@ -253,6 +355,8 @@
       el.addEventListener("click", () => loadReferenceConfigs());
     });
   }
+
+  window.databaseTableViewer = { open: openTableData, close: closeTableData };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

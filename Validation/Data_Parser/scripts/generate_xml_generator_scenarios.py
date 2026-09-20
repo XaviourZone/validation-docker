@@ -159,7 +159,6 @@ def main():
             manifest_lines.extend([
                 f"[{feed} / {filename}]",
                 f"ASSUMPTION: {rec.raw_attributes.get('scenario_assumption', '')}",
-                f"REFERENCE MATCH: NSC={'YES' if 'NSC' in str(enriched.raw_attributes) else 'SEE REMARKS'}",
                 f"XML FIELDS: {field_count}",
                 "VESSEL REMARKS:",
                 enriched.vessel_remarks or "(none)",

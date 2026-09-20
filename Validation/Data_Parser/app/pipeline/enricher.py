@@ -402,6 +402,7 @@ class VesselEnricher:
                 validity = f"{clean_remark_value(ctx.nsc_begin_date, 'UNKNOWN')} TO {clean_remark_value(ctx.nsc_end_date, 'UNKNOWN')}"
                 remarks_lines.append(remark_line("NSC", "VALIDITY", validity))
 
+        remarks_lines.append("")
         remarks_lines.append(remark_line("PANS", "CLEARED", "YES" if ctx.pans_matched else "NO MATCH"))
         if ctx.pans_matched:
             voyage_parts = []
@@ -420,6 +421,7 @@ class VesselEnricher:
             if cargo_parts:
                 remarks_lines.append(remark_line("PANS", "CARGO", " | ".join(cargo_parts)))
 
+        remarks_lines.append("")
         remarks_lines.append(remark_line("WRS", "CLEARED", "YES" if ctx.wrs_matched else "NO MATCH"))
         if ctx.wrs_matched:
             remarks_lines.append(remark_line(
@@ -439,6 +441,7 @@ class VesselEnricher:
                 clean_remark_value(ctx.wrs_sanctions_detail, "NONE"),
             ))
 
+        remarks_lines.append("")
         transmitted_mmsi = clean_remark_value(incoming_mmsi)
         transmitted_imo = clean_remark_value(incoming_imo)
         transmitted_name = clean_remark_value(incoming_name)
@@ -476,6 +479,7 @@ class VesselEnricher:
             f"{'DETECTED' if name_spoofing else 'NONE'} | TRANSMITTING={transmitted_name} | ACTUAL={clean_remark_value(reference_name)}",
         ))
 
+        remarks_lines.append("")
         remarks_lines.append(remark_line("SOURCE", "FEED", get_source_label(rec.source_name)))
         rec.vessel_remarks = "\n".join(remarks_lines)
 

@@ -4,7 +4,15 @@
   function byId(id) { return document.getElementById(id); }
 
   async function requestJson(url, options) {
-    const response = await fetch(url, options);
+    let response;
+    try {
+      response = await fetch(url, options);
+    } catch (error) {
+      const wrapped = new Error("Network error while contacting Validation Web Console: " + (error?.message || "request failed"));
+      wrapped.networkError = true;
+      wrapped.cause = error;
+      throw wrapped;
+    }
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data.error || data.success === false) {
       throw new Error(data.error || data.message || ("HTTP " + response.status));
@@ -116,24 +124,86 @@
     if (options.showLoading && window.consoleApp?.showLoading) window.consoleApp.showLoading(kind === "wrs" ? "Updating WRS" : "Updating PANS", kind === "wrs" ? "Uploading the selected folder and rebuilding WRS reference data…" : "Uploading the selected XML folder and configuring the live PANS feed…");
 
     try {
+      // Upload in small batches to avoid one HTTP connection per file for large WRS datasets.
+      const MAX_BATCH_BYTES = 32 * 1024 * 1024;
+      const MAX_BATCH_FILES = 50;
+      const MAX_UPLOAD_ATTEMPTS = 4;
+
+      const batches = [];
+      let batch = [];
+      let batchBytes = 0;
       for (const file of files) {
-        const relative = file.webkitRelativePath || file.name;
-        const form = new FormData();
-        form.append("file", file, file.name);
-        form.append("relative_path", relative);
+        const fileBytes = file.size || 0;
+        if (batch.length && (
+          batchBytes + fileBytes > MAX_BATCH_BYTES ||
+          batch.length >= MAX_BATCH_FILES
+        )) {
+          batches.push(batch);
+          batch = [];
+          batchBytes = 0;
+        }
+        batch.push(file);
+        batchBytes += fileBytes;
+      }
+      if (batch.length) batches.push(batch);
 
-        await requestJson(
-          "/api/database/folder/upload?kind=" + encodeURIComponent(kind) +
-          "&session=" + encodeURIComponent(session),
-          {method: "POST", body: form}
-        );
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex += 1) {
+        const currentBatch = batches[batchIndex];
+        let lastError = null;
 
-        uploaded += 1;
-        totalBytes += file.size || 0;
+        for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
+          try {
+            const form = new FormData();
+            currentBatch.forEach((file, index) => {
+              const relative = file.webkitRelativePath || file.name;
+              form.append("file_" + index, file, file.name);
+              form.append("relative_path_" + index, relative);
+            });
+
+            await requestJson(
+              "/api/database/folder/upload-batch?kind=" + encodeURIComponent(kind) +
+              "&session=" + encodeURIComponent(session),
+              {method: "POST", body: form}
+            );
+
+            lastError = null;
+            break;
+          } catch (error) {
+            lastError = error;
+            const message = String(error?.message || error || "");
+            const retryable = /network|failed to fetch|fetch resource|connection|reset|aborted/i.test(message);
+            if (!retryable || attempt >= MAX_UPLOAD_ATTEMPTS) break;
+
+            const delay = Math.min(1000 * (2 ** (attempt - 1)), 8000);
+            setFeedback(
+              feedbackId,
+              "Temporary upload connection error. Retrying batch " +
+              (batchIndex + 1).toLocaleString() + " / " + batches.length.toLocaleString() +
+              " (" + attempt + " / " + (MAX_UPLOAD_ATTEMPTS - 1) + ")…",
+              "warning"
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+        }
+
+        if (lastError) {
+          const firstRelative = currentBatch[0]?.webkitRelativePath || currentBatch[0]?.name || "unknown file";
+          throw new Error(
+            "Failed uploading batch starting with " + firstRelative +
+            " after " + MAX_UPLOAD_ATTEMPTS + " attempts: " +
+            (lastError.message || lastError)
+          );
+        }
+
+        for (const file of currentBatch) {
+          uploaded += 1;
+          totalBytes += file.size || 0;
+        }
         setFeedback(
           feedbackId,
           "Uploading " + uploaded.toLocaleString() + " / " + total.toLocaleString() +
-          " files (" + formatBytes(totalBytes) + ")…",
+          " files (" + formatBytes(totalBytes) + ") — batch " +
+          (batchIndex + 1).toLocaleString() + " / " + batches.length.toLocaleString(),
           "warning"
         );
       }

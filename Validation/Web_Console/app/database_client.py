@@ -253,7 +253,7 @@ class DatabaseClient:
                                 self.logger.info(f"[WRS_IMPORTER] {line}")
 
                     returncode = process.wait()
-                    detail = "\\n".join(output_lines).strip()
+                    detail = "\n".join(output_lines).strip()
 
                     if returncode == 0:
                         self.wrs_refresh_result = {

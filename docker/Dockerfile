@@ -8,13 +8,23 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /opt/validation
 
 COPY Validation/ /opt/validation/Validation/
+COPY offline/python-wheels/ /opt/validation/offline/python-wheels/
 
-RUN python -m pip install --no-cache-dir \
-      -r Validation/Data_Parser/requirements.txt \
-      -r Validation/Data_Router/requirements.txt \
-      -r Validation/Data_Forwarder/requirements.txt \
-      -r Validation/Web_Console/requirements.txt \
-      -r Validation/Database/requirements.txt
+RUN if find /opt/validation/offline/python-wheels -maxdepth 1 -name '*.whl' -print -quit | grep -q .; then \
+      python -m pip install --no-cache-dir --no-index --find-links=/opt/validation/offline/python-wheels \
+        -r Validation/Data_Parser/requirements.txt \
+        -r Validation/Data_Router/requirements.txt \
+        -r Validation/Data_Forwarder/requirements.txt \
+        -r Validation/Web_Console/requirements.txt \
+        -r Validation/Database/requirements.txt; \
+    else \
+      python -m pip install --no-cache-dir \
+        -r Validation/Data_Parser/requirements.txt \
+        -r Validation/Data_Router/requirements.txt \
+        -r Validation/Data_Forwarder/requirements.txt \
+        -r Validation/Web_Console/requirements.txt \
+        -r Validation/Database/requirements.txt; \
+    fi
 
 RUN mkdir -p \
       /opt/validation/DATA_INFLOW/SAIS_IOR \

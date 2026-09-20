@@ -76,13 +76,90 @@
 
     <div class="view-tab" id="view-forwarder"></div>
 
-    <div class="view-tab" id="view-database">
-      <div class="operator-toolbar">
-        <div class="control-group-card"><div class="control-group-title">WRS</div><div>Status: <span id="db-wrs-status" class="status-pill stopped">UNKNOWN</span></div><div>File: <strong id="db-wrs-file">wrs.db</strong></div><div>Size: <strong id="db-wrs-size">0 MB</strong></div><div>Tables: <strong id="db-wrs-tables">0</strong></div><div>Records: <strong id="db-wrs-records">0</strong></div><div>Last Import: <strong id="db-wrs-last">Unknown</strong></div><div class="control-btn-strip"><button class="btn btn-primary" id="btn-wrs-refresh">Refresh</button><button class="btn btn-danger" id="btn-wrs-clear">Clear</button></div></div>
-        <div class="control-group-card"><div class="control-group-title">PANS</div><div>Status: <span id="db-pans-status" class="status-pill stopped">UNKNOWN</span></div><div>Importer: <span id="db-pans-importer-status" class="status-pill stopped">UNKNOWN</span></div><div>Size: <strong id="db-pans-size">0 MB</strong></div><div>Tables: <strong id="db-pans-tables">0</strong></div><div>Records: <strong id="db-pans-records">0</strong></div><div>Files: <strong id="db-pans-files">0</strong></div><div>Last Update: <strong id="db-pans-last">Unknown</strong></div><div class="control-btn-strip"><button class="btn btn-success" id="btn-pans-start">Start</button><button class="btn btn-danger" id="btn-pans-stop">Stop</button><button class="btn btn-secondary" id="btn-pans-process">Process</button><button class="btn btn-danger" id="btn-pans-clear">Clear</button></div></div>
-        <div class="control-group-card"><div class="control-group-title">NSC</div><div>Status: <span id="db-nsc-status" class="status-pill stopped">UNKNOWN</span></div><div>File: <strong id="db-nsc-file">nsc.db</strong></div><div>Size: <strong id="db-nsc-size">0 MB</strong></div><div>Tables: <strong id="db-nsc-tables">0</strong></div><div>Records: <strong id="db-nsc-records">0</strong></div><div>East: <strong id="db-nsc-east">0</strong></div><div>West: <strong id="db-nsc-west">0</strong></div><div>Last Import: <strong id="db-nsc-last">Unknown</strong></div><div class="control-btn-strip"><button class="btn btn-primary" id="btn-nsc-refresh">Refresh</button><button class="btn btn-danger" id="btn-nsc-clear">Clear</button></div></div>
+        <div class="view-tab" id="view-database">
+      <div class="database-admin-grid">
+        <section class="database-source-card" data-db-card="wrs">
+          <div class="database-source-header">
+            <div><div class="database-source-title">WRS</div><div class="database-source-subtitle">Reference vessel data</div></div>
+            <span id="db-wrs-status" class="status-pill stopped">UNKNOWN</span>
+          </div>
+          <div class="database-source-body">
+            <div class="database-source-stat-row"><span>Database</span><strong id="db-wrs-file">wrs.db</strong></div>
+            <div class="database-source-stat-row"><span>Records</span><strong id="db-wrs-records">0</strong></div>
+            <div class="database-source-stat-row"><span>Last Update</span><strong id="db-wrs-last">Unknown</strong></div>
+            <div class="database-source-label">WRS source folder</div>
+            <div class="database-folder-row">
+              <input id="db-wrs-folder" class="form-input" readonly placeholder="Select WRS folder">
+              <button class="btn btn-secondary" id="btn-wrs-browse" type="button" data-folder-browser-target="db-wrs-folder" data-folder-browser-title="Select WRS folder">Browse…</button>
+            </div>
+            <div class="database-source-hint">The selected WRS folder must contain <strong>Datasets</strong> and <strong>Decode files</strong>.</div>
+            <div class="database-subfolder-grid">
+              <div><span>Datasets</span><code id="db-wrs-datasets">Not selected</code></div>
+              <div><span>Decode files</span><code id="db-wrs-decode">Not selected</code></div>
+            </div>
+            <div id="db-wrs-feedback" class="database-feedback" aria-live="polite"></div>
+            <div class="database-action-row">
+              <button class="btn btn-secondary" id="btn-wrs-save-folder" type="button">Save Folder</button>
+              <button class="btn btn-primary" id="btn-wrs-update" type="button">Update WRS</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="database-source-card" data-db-card="pans">
+          <div class="database-source-header">
+            <div><div class="database-source-title">PANS</div><div class="database-source-subtitle">Live XML reference feed</div></div>
+            <span id="db-pans-status" class="status-pill stopped">UNKNOWN</span>
+          </div>
+          <div class="database-source-body">
+            <div class="database-source-stat-row"><span>Database</span><strong>pans.db</strong></div>
+            <div class="database-source-stat-row"><span>Records</span><strong id="db-pans-records">0</strong></div>
+            <div class="database-source-stat-row"><span>Files processed</span><strong id="db-pans-files">0</strong></div>
+            <div class="database-source-stat-row"><span>Last Update</span><strong id="db-pans-last">Unknown</strong></div>
+            <div class="database-source-label">PANS XML source folder</div>
+            <div class="database-folder-row">
+              <input id="db-pans-folder" class="form-input" readonly placeholder="Select PANS XML folder">
+              <button class="btn btn-secondary" id="btn-pans-browse" type="button" data-folder-browser-target="db-pans-folder" data-folder-browser-title="Select PANS XML folder">Browse…</button>
+            </div>
+            <div class="database-source-hint">XML files in this folder are continuously monitored and imported. No Start/Stop/Process controls are required.</div>
+            <div id="db-pans-feedback" class="database-feedback" aria-live="polite"></div>
+            <div class="database-action-row">
+              <button class="btn btn-primary" id="btn-pans-save-folder" type="button">Save Folder</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="database-source-card" data-db-card="nsc">
+          <div class="database-source-header">
+            <div><div class="database-source-title">NSC</div><div class="database-source-subtitle">East / West Excel or CSV reference data</div></div>
+            <span id="db-nsc-status" class="status-pill stopped">UNKNOWN</span>
+          </div>
+          <div class="database-source-body">
+            <div class="database-source-stat-row"><span>Database</span><strong id="db-nsc-file">nsc.db</strong></div>
+            <div class="database-source-stat-row"><span>Records</span><strong id="db-nsc-records">0</strong></div>
+            <div class="database-source-stat-row"><span>East records</span><strong id="db-nsc-east">0</strong></div>
+            <div class="database-source-stat-row"><span>West records</span><strong id="db-nsc-west">0</strong></div>
+            <div class="database-file-picker">
+              <div class="database-source-label">NSC EAST</div>
+              <input id="db-nsc-east-file" class="database-file-input" type="file" accept=".xlsx,.xls,.csv">
+              <div id="db-nsc-east-name" class="database-file-name">No file selected</div>
+            </div>
+            <div class="database-file-picker">
+              <div class="database-source-label">NSC WEST</div>
+              <input id="db-nsc-west-file" class="database-file-input" type="file" accept=".xlsx,.xls,.csv">
+              <div id="db-nsc-west-name" class="database-file-name">No file selected</div>
+            </div>
+            <div class="database-source-hint">Select the East and/or West file. The console stores them as the active NSC EAST/WEST input and rebuilds the NSC database.</div>
+            <div id="db-nsc-feedback" class="database-feedback" aria-live="polite"></div>
+            <div class="database-action-row">
+              <button class="btn btn-primary" id="btn-nsc-upload" type="button">Upload &amp; Update NSC</button>
+            </div>
+          </div>
+        </section>
       </div>
-      <div class="panel"><div class="panel-header"><span class="panel-title">Tables</span></div><div class="panel-body" style="padding:0"><table class="data-table"><thead><tr><th>Database</th><th>Table</th><th>Rows</th></tr></thead><tbody id="db-tables-body"></tbody></table></div></div>
+      <div class="panel database-inventory-panel">
+        <div class="panel-header"><span class="panel-title">Active Reference Tables</span></div>
+        <div class="panel-body" style="padding:0"><table class="data-table"><thead><tr><th>Database</th><th>Table</th><th>Rows</th></tr></thead><tbody id="db-tables-body"></tbody></table></div>
+      </div>
     </div>
 
     <div class="view-tab" id="view-system"><div class="panel"><div class="panel-header"><span class="panel-title">System</span></div><div class="panel-body" id="system-diagnostics"></div></div></div>
@@ -134,6 +211,7 @@
 <div class="toast-container" id="toast-container"></div>
 <script src="/static/js/console.js?v=20260918-r2"></script>
 <script src="/static/js/console_ui_loader.js?v=20260918-r2"></script>
-<script src="/static/js/folder_browser.js?v=20260919-r1"></script>
+<script src="/static/js/folder_browser.js?v=20260920-r2"></script>
+<script src="/static/js/database_admin.js?v=20260920-r1"></script>
 </body>
 </html>

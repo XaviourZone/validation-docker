@@ -42,12 +42,14 @@ def install_filesystem_admin_extension(handler_class, logger):
         query = parse_qs(urlparse(self.path).query)
         raw = (query.get("path") or [""])[0].strip()
         try:
+            # Start directly at the host filesystem root. Do not show a
+            # second artificial "root" row; the operator should immediately
+            # see the actual top-level folders.
             if not raw:
-                self._json_response({"roots": _roots()})
-                return
+                raw = "/"
             # The operator browser works in host filesystem coordinates.
             # Docker exposes the host root read-only at VALIDATION_HOST_FILESYSTEM_ROOT.
-            candidate = Path(raw).expanduser() if raw else Path("/")
+            candidate = Path(raw).expanduser()
             if not candidate.is_absolute():
                 candidate = Path("/") / candidate
             host_path = candidate.resolve()

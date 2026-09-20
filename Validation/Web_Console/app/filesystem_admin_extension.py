@@ -19,13 +19,24 @@ def install_filesystem_admin_extension(handler_class, logger):
             return
         return original_get(self)
 
+    def _host_mount_root():
+        return Path(os.environ.get("VALIDATION_HOST_FILESYSTEM_ROOT", "/opt/validation/hostfs")).resolve()
+
+    def _host_to_container(host_path: Path) -> Path:
+        root = _host_mount_root()
+        relative = Path(str(host_path)).resolve().relative_to(Path("/"))
+        return (root / relative).resolve()
+
+    def _container_to_host(container_path: Path) -> Path:
+        root = _host_mount_root()
+        relative = container_path.resolve().relative_to(root)
+        return (Path("/") / relative).resolve()
+
     def _roots():
-        # Data Router file sources are configured relative to DATA_INFLOW.
-        # The Web Console container exposes that host directory at this path.
-        data_inflow = Path(os.environ.get("VALIDATION_DATA_INFLOW_ROOT", "/opt/validation/DATA_INFLOW")).resolve()
-        if data_inflow.exists() and data_inflow.is_dir():
-            return [data_inflow]
-        return [Path.cwd()]
+        root = _host_mount_root()
+        if root.exists() and root.is_dir():
+            return [{"name": "/", "path": "/", "readable": True}]
+        return [{"name": str(Path.cwd()), "path": str(Path.cwd()), "readable": True}]
 
     def filesystem_browse(self):
         query = parse_qs(urlparse(self.path).query)
@@ -37,23 +48,21 @@ def install_filesystem_admin_extension(handler_class, logger):
                     for p in _roots()
                 ]})
                 return
-            data_root = Path(os.environ.get("VALIDATION_DATA_INFLOW_ROOT", "/opt/validation/DATA_INFLOW")).resolve()
-            # Accept the configured relative folder (e.g. SAIS_IOR) as well
-            # as the container-visible absolute path.
-            candidate = Path(raw).expanduser()
+            # The operator browser works in host filesystem coordinates.
+            # Docker exposes the host root read-only at VALIDATION_HOST_FILESYSTEM_ROOT.
+            candidate = Path(raw).expanduser() if raw else Path("/")
             if not candidate.is_absolute():
-                candidate = data_root / candidate
-            path = candidate.resolve()
+                candidate = Path("/") / candidate
+            host_path = candidate.resolve()
             try:
-                path.relative_to(data_root)
-            except ValueError:
-                self._json_response({"error": "Folder is outside the Data Inflow root."}, status=HTTPStatus.FORBIDDEN)
+                path = _host_to_container(host_path)
+            except (ValueError, OSError) as exc:
+                self._json_response({"error": f"Invalid host path: {exc}"}, status=HTTPStatus.BAD_REQUEST)
                 return
             if not path.exists() or not path.is_dir():
-                self._json_response({"error": f"Directory does not exist: {path}"}, status=HTTPStatus.NOT_FOUND)
+                self._json_response({"error": f"Directory does not exist: {host_path}"}, status=HTTPStatus.NOT_FOUND)
                 return
-            relative = path.relative_to(data_root)
-            logical_path = "" if str(relative) == "." else relative.as_posix()
+            logical_path = "/" if str(host_path) == "/" else str(host_path)
             entries = []
             for child in sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
                 if not child.is_dir() or child.name.startswith("."):
@@ -62,13 +71,12 @@ def install_filesystem_admin_extension(handler_class, logger):
                     readable = os.access(child, os.R_OK | os.X_OK)
                 except OSError:
                     readable = False
-                child_relative = child.relative_to(data_root)
-                child_logical = "" if str(child_relative) == "." else child_relative.as_posix()
-                entries.append({"name": child.name, "path": str(child), "logical_path": child_logical, "readable": readable})
+                child_host = _container_to_host(child)
+                entries.append({"name": child.name, "path": str(child_host), "logical_path": str(child_host), "readable": readable})
             self._json_response({
-                "path": str(path),
+                "path": str(host_path),
                 "logical_path": logical_path,
-                "parent": str(path.parent) if path.parent != path else None,
+                "parent": str(host_path.parent) if host_path != Path("/") else None,
                 "entries": entries,
             })
         except (OSError, ValueError) as exc:

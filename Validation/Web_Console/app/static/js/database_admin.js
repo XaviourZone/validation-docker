@@ -1,137 +1,156 @@
-/* Database administration UI. PANS is a live XML folder watcher. */
 (function () {
   "use strict";
-  const api = (url, options) => fetch(url, Object.assign({headers:{"Content-Type":"application/json"}}, options || {})).then(async r => {
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.error || d.message || `HTTP ${r.status}`);
-    return d;
-  });
 
-  function view() { return document.getElementById("view-database"); }
+  function byId(id) { return document.getElementById(id); }
 
-  function makePanel() {
-    const v = view();
-    if (!v || document.getElementById("pans-live-config")) return;
-    const panel = document.createElement("div");
-    panel.id = "pans-live-config";
-    panel.className = "panel pans-config-panel";
-    panel.innerHTML = `
-      <div class="panel-header">
-        <div>
-          <span class="panel-title">PANS XML SOURCE</span>
-          <div class="panel-subtitle">Live folder monitored by the PANS importer</div>
-        </div>
-        <span id="pans-watch-status" class="status-pill stopped">NOT CONFIGURED</span>
-      </div>
-      <div class="panel-body">
-        <div class="pans-config-row">
-          <div class="pans-config-field">
-            <label class="form-label">XML Source Folder</label>
-            <div class="pans-folder-line">
-              <input id="pans-input-folder" class="form-input" type="text" readonly>
-              <button type="button" class="btn btn-secondary" id="pans-browse">Browse…</button>
-            </div>
-            <div class="form-hint">New XML files in this folder are continuously detected and imported.</div>
-          </div>
-          <button type="button" class="btn btn-primary" id="pans-save">Save Folder</button>
-        </div>
-        <div id="pans-config-message" class="form-hint" style="margin-top:10px;"></div>
-      </div>`;
-    v.insertBefore(panel, v.firstElementChild || null);
-    document.getElementById("pans-browse").onclick = () => openBrowser(document.getElementById("pans-input-folder"));
-    document.getElementById("pans-save").onclick = saveFolder;
-    loadConfig();
-  }
-
-  async function loadConfig() {
-    try {
-      const d = await api("/api/database/pans/config");
-      document.getElementById("pans-input-folder").value = d.input_dir || "";
-      const pill = document.getElementById("pans-watch-status");
-      pill.textContent = d.input_dir ? "CONFIGURED" : "NOT CONFIGURED";
-      pill.className = `status-pill ${d.input_dir ? "running" : "stopped"}`;
-    } catch (e) { setMessage(e.message, true); }
-  }
-
-  async function saveFolder() {
-    const folder = document.getElementById("pans-input-folder").value.trim();
-    if (!folder) return setMessage("Select a PANS XML source folder first.", true);
-    try {
-      await api("/api/database/pans/config", {method:"POST", body:JSON.stringify({input_dir:folder})});
-      setMessage("PANS source folder saved. The importer will restart and watch it continuously.");
-      await loadConfig();
-    } catch (e) { setMessage(e.message, true); }
-  }
-
-  function setMessage(message, error) {
-    const el = document.getElementById("pans-config-message");
-    if (el) { el.textContent = message; el.style.color = error ? "var(--accent-rose)" : "var(--text-secondary)"; }
-  }
-
-  function openBrowser(target) {
-    let modal = document.getElementById("database-folder-browser");
-    if (!modal) {
-      modal = document.createElement("div");
-      modal.id = "database-folder-browser";
-      modal.className = "modal-backdrop active";
-      modal.style.zIndex = "10100";
-      modal.innerHTML = `<div class="modal-container" style="max-width:780px;">
-        <div class="modal-header"><div class="modal-title">Select PANS XML folder</div><button class="modal-close-btn" id="dfb-close">✕</button></div>
-        <div class="modal-body">
-          <div class="form-group"><label class="form-label">Selected folder</label><input id="dfb-path" class="form-input" readonly></div>
-          <div style="display:flex;gap:8px;margin-bottom:10px;"><button class="btn btn-secondary" id="dfb-up">Up</button><button class="btn btn-primary" id="dfb-select">Select this folder</button></div>
-          <div id="dfb-list" style="max-height:420px;overflow:auto;border:1px solid var(--border-color);border-radius:6px;"></div>
-          <div id="dfb-error" style="color:var(--accent-rose);margin-top:8px;"></div>
-        </div></div>`;
-      document.body.appendChild(modal);
-      document.getElementById("dfb-close").onclick = () => modal.remove();
-      document.getElementById("dfb-select").onclick = () => { target.value = document.getElementById("dfb-path").value; modal.remove(); };
-      document.getElementById("dfb-up").onclick = async () => {
-        const current = document.getElementById("dfb-path").value;
-        const d = await browse(current);
-        if (d.parent) browse(d.parent);
-      };
+  async function requestJson(url, options) {
+    const response = await fetch(url, options);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.error || data.success === false) {
+      throw new Error(data.error || data.message || ("HTTP " + response.status));
     }
-    const current = target.value.trim();
-    browse(current);
-    async function browse(path) {
-      try {
-        const url = `/api/database/filesystem/browse${path ? `?path=${encodeURIComponent(path)}` : ""}`;
-        const d = await api(url);
-        if (d.roots) {
-          document.getElementById("dfb-path").value = "";
-          renderList((d.roots || []).map(x => ({...x, name:x.name})));
-        } else {
-          document.getElementById("dfb-path").value = d.path;
-          renderList(d.entries || []);
-        }
-        document.getElementById("dfb-error").textContent = "";
-        return d;
-      } catch (e) { document.getElementById("dfb-error").textContent = e.message; return {}; }
+    return data;
+  }
+
+  function setFeedback(id, message, type) {
+    const el = byId(id);
+    if (!el) return;
+    el.textContent = message || "";
+    el.className = "database-feedback" + (type ? " " + type : "");
+  }
+
+  function setBusy(id, busy, text) {
+    const button = byId(id);
+    if (!button) return;
+    if (busy) {
+      if (!button.dataset.originalText) button.dataset.originalText = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<span class="loading-inline">' + (text || "Working…") + '</span>';
+    } else {
+      button.disabled = false;
+      if (button.dataset.originalText) {
+        button.innerHTML = button.dataset.originalText;
+        delete button.dataset.originalText;
+      }
     }
-    function renderList(entries) {
-      const list = document.getElementById("dfb-list"); list.innerHTML = "";
-      if (!entries.length) { list.innerHTML = `<div style="padding:12px;color:var(--text-muted);">No readable folders</div>`; return; }
-      entries.forEach(e => {
-        const b = document.createElement("button");
-        b.type = "button"; b.className = "btn btn-secondary";
-        b.style.cssText = "display:block;width:100%;text-align:left;margin:3px 0;";
-        b.disabled = e.readable === false;
-        b.textContent = `📁 ${e.name}`;
-        b.onclick = () => browse(e.path);
-        list.appendChild(b);
+  }
+
+  function renderWrsConfig(data) {
+    const folder = byId("db-wrs-folder");
+    const datasets = byId("db-wrs-datasets");
+    const decode = byId("db-wrs-decode");
+    if (folder) folder.value = data.input_dir || "";
+    if (datasets) datasets.textContent = data.datasets_dir || "Not found";
+    if (decode) decode.textContent = data.decode_dir || "Not found";
+    setFeedback("db-wrs-feedback",
+      data.valid_structure ? "WRS folder structure is valid." : "Select a WRS folder containing Datasets and Decode files.",
+      data.valid_structure ? "success" : "warning");
+  }
+
+  function renderPansConfig(data) {
+    const folder = byId("db-pans-folder");
+    if (folder) folder.value = data.input_dir || "";
+  }
+
+  async function loadReferenceConfigs() {
+    try { renderWrsConfig(await requestJson("/api/database/wrs/config")); } catch (_) {}
+    try { renderPansConfig(await requestJson("/api/database/pans/config")); } catch (_) {}
+  }
+
+  async function saveFolder(kind) {
+    const inputId = kind === "wrs" ? "db-wrs-folder" : "db-pans-folder";
+    const feedbackId = kind === "wrs" ? "db-wrs-feedback" : "db-pans-feedback";
+    const buttonId = kind === "wrs" ? "btn-wrs-save-folder" : "btn-pans-save-folder";
+    const folder = (byId(inputId)?.value || "").trim();
+
+    if (!folder) {
+      setFeedback(feedbackId, "Select a folder first.", "error");
+      return false;
+    }
+
+    setBusy(buttonId, true, "Saving…");
+    try {
+      const data = await requestJson("/api/database/" + kind + "/config", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({input_dir: folder})
       });
+      setFeedback(feedbackId, data.message || "Folder saved.", "success");
+      if (kind === "wrs") renderWrsConfig(data);
+      return true;
+    } catch (error) {
+      setFeedback(feedbackId, error.message, "error");
+      return false;
+    } finally {
+      setBusy(buttonId, false);
     }
   }
 
-  function boot() {
-    makePanel();
-    setTimeout(makePanel, 400);
-    setTimeout(makePanel, 1200);
+  async function updateWrs() {
+    if (!await saveFolder("wrs")) return;
+    setBusy("btn-wrs-update", true, "Updating…");
+    try {
+      const data = await requestJson("/api/database/wrs/refresh", {method: "POST"});
+      setFeedback("db-wrs-feedback", data.message || "WRS update started.", "success");
+      if (window.consoleApp?.refresh) window.consoleApp.refresh();
+    } catch (error) {
+      setFeedback("db-wrs-feedback", error.message, "error");
+    } finally {
+      setBusy("btn-wrs-update", false);
+    }
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot); else boot();
-  document.addEventListener("click", e => {
-    const nav = e.target.closest("[data-tab='database']");
-    if (nav) setTimeout(makePanel, 50);
-  });
+
+  function updateFileLabel(inputId, labelId) {
+    const input = byId(inputId);
+    const label = byId(labelId);
+    if (input && label) label.textContent = input.files.length ? input.files[0].name : "No file selected";
+  }
+
+  async function uploadNsc() {
+    const east = byId("db-nsc-east-file");
+    const west = byId("db-nsc-west-file");
+
+    if ((!east || !east.files.length) && (!west || !west.files.length)) {
+      setFeedback("db-nsc-feedback", "Select NSC EAST and/or NSC WEST file.", "error");
+      return;
+    }
+
+    const form = new FormData();
+    if (east?.files.length) form.append("east", east.files[0], east.files[0].name);
+    if (west?.files.length) form.append("west", west.files[0], west.files[0].name);
+
+    setBusy("btn-nsc-upload", true, "Uploading…");
+    try {
+      const data = await requestJson("/api/database/nsc/upload", {method: "POST", body: form});
+      setFeedback("db-nsc-feedback", data.message || "NSC update started.", "success");
+      if (east) east.value = "";
+      if (west) west.value = "";
+      updateFileLabel("db-nsc-east-file", "db-nsc-east-name");
+      updateFileLabel("db-nsc-west-file", "db-nsc-west-name");
+      if (window.consoleApp?.refresh) window.consoleApp.refresh();
+    } catch (error) {
+      setFeedback("db-nsc-feedback", error.message, "error");
+    } finally {
+      setBusy("btn-nsc-upload", false);
+    }
+  }
+
+  function init() {
+    loadReferenceConfigs();
+
+    byId("btn-wrs-save-folder")?.addEventListener("click", () => saveFolder("wrs"));
+    byId("btn-wrs-update")?.addEventListener("click", updateWrs);
+    byId("btn-pans-save-folder")?.addEventListener("click", () => saveFolder("pans"));
+
+    byId("db-nsc-east-file")?.addEventListener("change", () => updateFileLabel("db-nsc-east-file", "db-nsc-east-name"));
+    byId("db-nsc-west-file")?.addEventListener("change", () => updateFileLabel("db-nsc-west-file", "db-nsc-west-name"));
+    byId("btn-nsc-upload")?.addEventListener("click", uploadNsc);
+
+    document.querySelectorAll('.nav-item[data-tab="database"]').forEach((el) => {
+      el.addEventListener("click", () => loadReferenceConfigs());
+    });
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """Generate current XML-generator scenario samples from the canonical model."""
-from __future__ import annotations
-
 from pathlib import Path
 import re
 import sys
@@ -13,7 +11,11 @@ from Validation.Data_Parser.app.models.common import CommonVesselRecord
 from Validation.Data_Parser.app.pipeline.normalizer import normalize_from_common_record
 from Validation.Data_Parser.app.pipeline.xml_generator import XTrackXMLGenerator
 
-OUT = ROOT / "runtime" / "xml-generator-scenarios" / "xml_generator_samples.txt"
+# runtime/ may be root-owned on some operator systems after Docker runs.
+# Keep generated samples under the repository so the operator can always read
+# them without sudo.
+OUT = ROOT / "Validation" / "Data_Parser" / "generated_samples" / "xml_generator_samples.txt"
+
 SOURCE_IDS = {
     "SAIS_IOR": 38, "SAIS_GLOBAL": 38, "MSIS": 250, "LRIT": 40,
     "VATMS_EAST": 245, "VATMS_WEST": 223, "NAIS": 37,

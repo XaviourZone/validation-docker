@@ -167,62 +167,69 @@ def _db_candidates(path: Path, query: str):
 
 
 def discover_reference_anchor():
-    """Find one real identity that resolves across the available references.
+    """Find real identities with useful reference coverage.
 
-    Selection is based on the live SQLite contents. No operator/reference DB is
-    modified. The candidate is scored by actual WRS/PANS/NSC matches and by the
-    presence of the intelligence fields used in VesselEnricher.vessel_remarks.
+    Prefer candidates by MMSI/IMO that are present in multiple active
+    reference databases and that carry the intelligence fields used in
+    VesselEnricher.vessel_remarks. A small deterministic scan keeps generation
+    practical while ensuring the generated scenarios exercise real data.
     """
-    candidate_rows = []
+    def clean(value):
+        if value in (None, ""):
+            return None
+        return str(value).strip()
 
-    candidate_rows.extend(
+    candidates_by_key = {}
+
+    def add_candidates(rows, source):
+        for row in rows:
+            mmsi = clean(row.get("mmsi"))
+            imo = clean(row.get("imo"))
+            callsign = clean(row.get("callsign"))
+            name = clean(row.get("vessel_name"))
+            key = (mmsi, imo)
+            if not mmsi and not imo:
+                continue
+            item = candidates_by_key.setdefault(
+                key,
+                {"mmsi": mmsi, "imo": imo, "callsign": callsign, "vessel_name": name, "sources": set()},
+            )
+            item["sources"].add(source)
+            item["callsign"] = item["callsign"] or callsign
+            item["vessel_name"] = item["vessel_name"] or name
+
+    add_candidates(
         _db_candidates(
             _reference_path("WRS"),
             "SELECT MMSI AS mmsi, IMO AS imo, VESSEL_NAME AS vessel_name, "
             "CALL_SIGN AS callsign FROM wrs_datasets_vessels "
             "WHERE (MMSI IS NOT NULL AND MMSI <> '') OR (IMO IS NOT NULL AND IMO <> '') "
-            "LIMIT 300",
-        )
+            "ORDER BY VESSEL_ID LIMIT 1000",
+        ),
+        "WRS",
     )
-    candidate_rows.extend(
+    add_candidates(
         _db_candidates(
             _reference_path("PANS"),
             "SELECT MMSINumber AS mmsi, IMONumber AS imo, VesselName AS vessel_name, "
             "CallSign AS callsign FROM pans_vespro "
             "WHERE (MMSINumber IS NOT NULL AND MMSINumber <> '') OR "
-            "(IMONumber IS NOT NULL AND IMONumber <> '') LIMIT 300",
-        )
+            "(IMONumber IS NOT NULL AND IMONumber <> '') "
+            "ORDER BY _id LIMIT 1000",
+        ),
+        "PANS",
     )
-    candidate_rows.extend(
+    add_candidates(
         _db_candidates(
             _reference_path("NSC"),
             "SELECT ID_MMSI AS mmsi, ID_IMO AS imo, VESSEL_NAME AS vessel_name, "
             "ID_CALLSIGN AS callsign FROM nsc_vessels "
             "WHERE (ID_MMSI IS NOT NULL AND ID_MMSI <> '') OR "
-            "(ID_IMO IS NOT NULL AND ID_IMO <> '') LIMIT 300",
-        )
+            "(ID_IMO IS NOT NULL AND ID_IMO <> '') "
+            "ORDER BY _id LIMIT 1000",
+        ),
+        "NSC",
     )
-
-    # Deduplicate candidate identities before resolving them.
-    unique = {}
-    for row in candidate_rows:
-        def clean(value):
-            if value in (None, ""):
-                return None
-            return str(value).strip()
-
-        key = (
-            clean(row.get("mmsi")),
-            clean(row.get("imo")),
-            (clean(row.get("callsign")) or "").upper(),
-            (clean(row.get("vessel_name")) or "").upper(),
-        )
-        unique[key] = {
-            "mmsi": clean(row.get("mmsi")),
-            "imo": clean(row.get("imo")),
-            "callsign": clean(row.get("callsign")),
-            "vessel_name": clean(row.get("vessel_name")),
-        }
 
     ref_db = ReferenceDB(
         wrs_path=_reference_path("WRS"),
@@ -232,7 +239,7 @@ def discover_reference_anchor():
     best = None
     best_score = -1
     try:
-        for candidate in unique.values():
+        for candidate in candidates_by_key.values():
             try:
                 mmsi = int(float(candidate["mmsi"])) if candidate["mmsi"] else None
             except (TypeError, ValueError):
@@ -248,29 +255,43 @@ def discover_reference_anchor():
                 callsign=candidate["callsign"],
                 vessel_name=candidate["vessel_name"],
             )
-            matched = sum(
-                1 for flag in (ctx.wrs_matched, ctx.pans_matched, ctx.nsc_matched)
-                if flag
-            )
-            if not matched:
+            matched = {
+                "WRS": ctx.wrs_matched,
+                "PANS": ctx.pans_matched,
+                "NSC": ctx.nsc_matched,
+            }
+            matched_count = sum(matched.values())
+            if matched_count == 0:
                 continue
 
-            score = matched * 100
-            if ctx.wrs_vigilance_score is not None:
-                score += 10
-            if ctx.wrs_ais_spoofing_detail:
-                score += 8
-            if ctx.wrs_ais_gap_detail:
-                score += 8
-            if ctx.wrs_sanctions_detail:
-                score += 8
-            if ctx.pans_vcn or ctx.pans_berman_dest or ctx.pans_npc:
-                score += 8
-            if ctx.pans_cargo_description or ctx.pans_cargo_tonnage is not None:
-                score += 8
-            if ctx.nsc_region or ctx.nsc_begin_date or ctx.nsc_end_date:
-                score += 4
+            # Strong preference for a vessel resolved by all three sources.
+            score = matched_count * 100
 
+            # Require actual field coverage for the remarks section before
+            # awarding the intelligence bonuses.
+            if ctx.wrs_vigilance_score is not None:
+                score += 20
+            if ctx.wrs_ais_spoofing_detail:
+                score += 15
+            if ctx.wrs_ais_gap_detail:
+                score += 15
+            if ctx.wrs_sanctions_detail:
+                score += 15
+            if ctx.pans_vcn or ctx.pans_berman_dest or ctx.pans_npc:
+                score += 15
+            if ctx.pans_cargo_description or ctx.pans_cargo_tonnage is not None or ctx.pans_hazardous:
+                score += 15
+            if ctx.nsc_region or ctx.nsc_begin_date or ctx.nsc_end_date:
+                score += 10
+
+            # Prefer candidates discovered from multiple source DBs, then
+            # deterministic identity ordering.
+            score += min(len(candidate["sources"]), 3)
+            identity_sort = (
+                candidate["mmsi"] or "",
+                candidate["imo"] or "",
+                (candidate["vessel_name"] or "").upper(),
+            )
             if score > best_score:
                 best_score = score
                 best = {
@@ -278,13 +299,24 @@ def discover_reference_anchor():
                     "imo": imo,
                     "callsign": candidate["callsign"],
                     "vessel_name": candidate["vessel_name"],
-                    "matched_sources": {
-                        "WRS": ctx.wrs_matched,
-                        "PANS": ctx.pans_matched,
-                        "NSC": ctx.nsc_matched,
-                    },
+                    "matched_sources": matched,
                     "score": score,
                 }
+            elif score == best_score and best is not None:
+                best_sort = (
+                    str(best["mmsi"] or ""),
+                    str(best["imo"] or ""),
+                    str(best["vessel_name"] or "").upper(),
+                )
+                if identity_sort < best_sort:
+                    best = {
+                        "mmsi": mmsi,
+                        "imo": imo,
+                        "callsign": candidate["callsign"],
+                        "vessel_name": candidate["vessel_name"],
+                        "matched_sources": matched,
+                        "score": score,
+                    }
     finally:
         ref_db.close()
 

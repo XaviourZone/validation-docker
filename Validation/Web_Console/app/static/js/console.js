@@ -1199,6 +1199,8 @@
         executeToggle(sourceName, true);
       }
     },
+    showLoading: showAppLoading,
+    hideLoading: hideAppLoading,
     confirmDeleteSource: (sourceName) => {
       showConfirmModal({
         title: `Delete Source '${sourceName}'?`,

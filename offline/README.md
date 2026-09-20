@@ -28,4 +28,4 @@ Do not use the Ubuntu 26.04 DEB bundle on this host. Use the static Docker bundl
 4. Start the stack:
    `docker compose up -d --no-build`
 
-The static Docker bundle uses Docker Engine 24.0.2 and Docker Compose v2.20.3. The Docker static x86_64 archive is published by Docker; Compose is installed as the Docker CLI plugin.
+The static Docker bundle uses Docker Engine 24.0.9 and Docker Compose v2.20.2, matching the single-folder offline bundle documented in OFFLINE_DEPLOYMENT.md. The Docker static x86_64 archive is published by Docker; Compose is installed as the Docker CLI plugin.

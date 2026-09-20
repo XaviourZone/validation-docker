@@ -8,6 +8,11 @@ import time
 from pathlib import Path
 
 
+def compute_data_hash(data: bytes) -> str:
+    """Return SHA-256 for an in-memory byte payload."""
+    return hashlib.sha256(data).hexdigest()
+
+
 def compute_file_hash(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
     """Return SHA-256 of the file contents without loading the whole file into RAM."""
     digest = hashlib.sha256()
@@ -18,6 +23,36 @@ def compute_file_hash(file_path: Path, chunk_size: int = 1024 * 1024) -> str:
                 break
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def read_text_and_hash(
+    file_path: Path,
+    chunk_size: int = 1024 * 1024,
+) -> tuple[str, str]:
+    """Read a text file once while calculating its SHA-256.
+
+    The Router historically hashed the complete file and then opened it again
+    to build the envelope payload. This helper preserves the exact payload
+    decoding behavior while combining those two large sequential reads into
+    one. The complete payload is still retained because the Router/Parser
+    envelope contract is intentionally unchanged.
+    """
+    digest = hashlib.sha256()
+    chunks = []
+    with open(file_path, "rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+            chunks.append(chunk)
+
+    raw = b"".join(chunks)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+    return text, digest.hexdigest()
 
 
 def generate_file_message_id(

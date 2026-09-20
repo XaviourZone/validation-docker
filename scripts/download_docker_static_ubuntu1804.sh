@@ -5,8 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${ROOT}/offline/docker-static"
 mkdir -p "${OUT}"
 
-DOCKER_VERSION="24.0.2"
-COMPOSE_VERSION="v2.20.3"
+DOCKER_VERSION="24.0.9"
+COMPOSE_VERSION="v2.20.2"
 DOCKER_URL="https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz"
 COMPOSE_URL="https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-x86_64"
 

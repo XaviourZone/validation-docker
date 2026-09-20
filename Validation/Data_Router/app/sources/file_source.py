@@ -15,7 +15,7 @@ from ..queue.item import RoutingEnvelope
 from ..reliability.state import FileState, FileStateStore
 from ..routing.router import RoutingEngine
 from ..utils.filesystem import FileSnapshot, is_file_stable
-from ..utils.hashing import compute_file_hash, generate_file_message_id
+from ..utils.hashing import generate_file_message_id, read_text_and_hash
 from ..utils.time import now_iso
 
 
@@ -178,7 +178,10 @@ class FileSourceManager(BaseSource):
         try:
             file_size = curr_snapshot.size
             mtime = curr_snapshot.mtime
-            file_hash = compute_file_hash(file_path)
+            # Hash and load the payload in one sequential disk pass. The
+            # envelope contract is unchanged; this only removes a duplicate
+            # full-file read for large AIS/CSV inputs.
+            content, file_hash = read_text_and_hash(file_path)
         except Exception as e:
             self.logger.warning(f"Failed to read/hash file {file_path}: {e}")
             return
@@ -227,16 +230,6 @@ class FileSourceManager(BaseSource):
                     status=FileState.READY,
                 )
 
-            try:
-                content = self._read_file_content(file_path)
-            except Exception as e:
-                self.logger.error(f"Failed to read content of file {file_path}: {e}")
-                if self.state_store:
-                    self.state_store.update_status(
-                        message_id, FileState.DISCOVERED, error=str(e)
-                    )
-                return
-
             envelope = RoutingEnvelope(
                 message_id=message_id,
                 source=self.name,
@@ -273,11 +266,3 @@ class FileSourceManager(BaseSource):
             # during the current scan operation and must always be released.
             self._in_flight_files.discard(file_key)
 
-    def _read_file_content(self, file_path: Path) -> str:
-        """Safely read text file content, falling back to latin-1 if invalid utf-8."""
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
-        except UnicodeDecodeError:
-            with open(file_path, "r", encoding="latin-1") as f:
-                return f.read()

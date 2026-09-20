@@ -64,6 +64,14 @@ class TestReferenceImporters(unittest.TestCase):
                 ).fetchone()[0],
                 "COMPLETED",
             )
+            indexes = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master "
+                    "WHERE type='index' AND tbl_name='wrs_datasets_vessels'"
+                ).fetchall()
+            }
+            self.assertIn("idx_wrs_datasets_vessels_vessel_id", indexes)
         finally:
             conn.close()
 

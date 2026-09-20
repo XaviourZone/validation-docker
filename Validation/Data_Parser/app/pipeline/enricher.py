@@ -51,6 +51,57 @@ INCOMING_ALIASES = {
     "message_type": "app_message_id",
 }
 
+# Field-specific reference fallback priority.
+#
+# Incoming/transmitted data is always considered first. These priorities are
+# only used when the incoming field is missing. They intentionally differ by
+# business meaning instead of imposing one global WRS/PANS/NSC order.
+#
+# Current NSC schema (nsc_vessels) contains vessel identity/type fields but no
+# voyage/calling columns. Therefore NSC is first for voyage fields as the
+# agreed policy, but the lookup naturally falls through to PANS/WRS when NSC
+# has no value for that field.
+REFERENCE_FALLBACK_PRIORITY = {
+    # Vessel identity / descriptive fields: NSC -> PANS -> WRS.
+    "id.imo": ("NSC", "PANS", "WRS"),
+    "id.callsign": ("NSC", "PANS", "WRS"),
+    "vessel.name": ("NSC", "PANS", "WRS"),
+    "vessel.description": ("NSC", "PANS", "WRS"),
+    "ais.typeAndCargo": ("NSC", "PANS", "WRS"),
+
+    # Physical/reference dimensions: WRS is the richer dimensions source;
+    # PANS is the next vessel-profile fallback.
+    "vessel.length": ("WRS", "PANS", "NSC"),
+    "vessel.beam": ("WRS", "PANS", "NSC"),
+    "vessel.draft": ("PANS", "WRS", "NSC"),
+    "vessel.grosstonnage": ("WRS", "PANS", "NSC"),
+
+    # Voyage/calling data: NSC -> PANS -> WRS. NSC currently has no such
+    # columns, so PANS is normally the first populated source here.
+    "voyage.arrival": ("NSC", "PANS", "WRS"),
+    "voyage.departure": ("NSC", "PANS", "WRS"),
+    "voyage.destination": ("NSC", "PANS", "WRS"),
+    "voyage.eta": ("NSC", "PANS", "WRS"),
+    "voyage.etd": ("NSC", "PANS", "WRS"),
+    "voyage.origin": ("NSC", "PANS", "WRS"),
+
+    # Operational/reference attributes that are authoritative in WRS.
+    "cat.annotation": ("WRS", "PANS", "NSC"),
+    "cat.identity": ("WRS", "PANS", "NSC"),
+    "id.mmsi.destination": ("WRS", "PANS", "NSC"),
+    "foreign.track.number": ("NSC", "PANS", "WRS"),
+}
+
+DEFAULT_REFERENCE_FALLBACK_PRIORITY = ("NSC", "PANS", "WRS")
+
+
+def _reference_order(logical_field: str):
+    return REFERENCE_FALLBACK_PRIORITY.get(
+        logical_field,
+        DEFAULT_REFERENCE_FALLBACK_PRIORITY,
+    )
+
+
 
 def _parser_name(source: str) -> str:
     upper = (source or "").upper()
@@ -120,7 +171,7 @@ class VesselEnricher:
 
         effective_mmsi = incoming_mmsi
         if not is_valid_mmsi(effective_mmsi):
-            for candidate in (ctx.pans_mmsi, ctx.nsc_mmsi, ctx.wrs_mmsi):
+            for candidate in (ctx.nsc_mmsi, ctx.pans_mmsi, ctx.wrs_mmsi):
                 if candidate and is_valid_mmsi(candidate):
                     effective_mmsi = candidate
                     break
@@ -133,7 +184,7 @@ class VesselEnricher:
             else {}
         )
 
-        ref_mmsi = ctx.pans_mmsi or ctx.nsc_mmsi or ctx.wrs_mmsi
+        ref_mmsi = ctx.nsc_mmsi or ctx.pans_mmsi or ctx.wrs_mmsi
         try:
             ref_mmsi = int(float(str(ref_mmsi))) if ref_mmsi is not None else None
         except Exception:
@@ -146,21 +197,23 @@ class VesselEnricher:
             rec.foreign_track_number = None
         rec.sys_track_number = incoming_mmsi
 
-        # Reference enrichment is field-availability driven.
-        # PANS is checked first, then NSC, then WRS. A source only contributes
-        # when that source resolved a vessel; a missing field falls through to
-        # the next available source. Incoming live data remains authoritative.
-        ref_order = tuple(
-            source for source, matched in (
-                ("PANS", ctx.pans_matched),
-                ("NSC", ctx.nsc_matched),
-                ("WRS", ctx.wrs_matched),
-            )
-            if matched
-        ) or ("PANS", "NSC", "WRS")
+        # Reference enrichment is field-specific. A reference source only
+        # participates when it actually matched the vessel. Missing values then
+        # fall through according to REFERENCE_FALLBACK_PRIORITY.
+        matched_sources = {
+            "NSC": ctx.nsc_matched,
+            "PANS": ctx.pans_matched,
+            "WRS": ctx.wrs_matched,
+        }
 
-        def ref_value(*fields):
-            for source in ref_order:
+        def ref_order_for(logical_field):
+            return tuple(
+                source for source in _reference_order(logical_field)
+                if matched_sources.get(source, False)
+            )
+
+        def ref_value(logical_field, *fields):
+            for source in ref_order_for(logical_field):
                 prefix = source.lower()
                 for field in fields:
                     value = getattr(ctx, f"{prefix}_{field}", None)
@@ -172,11 +225,11 @@ class VesselEnricher:
         if incoming_name and incoming_name.upper() not in ("UNKNOWN", "-", "N/A", "NONE"):
             resolved_name = incoming_name
         else:
-            resolved_name = ref_value("vessel_name")
+            resolved_name = ref_value("vessel.name", "vessel_name")
         rec.vessel_name = sanitize_string(resolved_name)
 
         if not rec.id_callsign:
-            rec.id_callsign = ref_value("callsign")
+            rec.id_callsign = ref_value("id.callsign", "callsign")
 
         if not rec.id_imo or not is_valid_imo(rec.id_imo):
             for source in ref_order:
@@ -203,16 +256,16 @@ class VesselEnricher:
                     break
 
         if not rec.vessel_description:
-            rec.vessel_description = ref_value("vessel_type")
+            rec.vessel_description = ref_value("vessel.description", "vessel_type")
 
         if rec.vessel_length is None:
-            rec.vessel_length = ref_value("loa")
+            rec.vessel_length = ref_value("vessel.length", "loa")
         if rec.vessel_beam is None:
-            rec.vessel_beam = ref_value("breadth", "beam")
+            rec.vessel_beam = ref_value("vessel.beam", "breadth", "beam")
         if rec.vessel_draft is None:
-            rec.vessel_draft = ref_value("draft", "max_draft")
+            rec.vessel_draft = ref_value("vessel.draft", "draft", "max_draft")
         if rec.vessel_grosstonnage is None:
-            rec.vessel_grosstonnage = ref_value("gross", "grt")
+            rec.vessel_grosstonnage = ref_value("vessel.grosstonnage", "gross", "grt")
 
         effective_vigilance = ctx.wrs_vigilance_score if ctx.wrs_vigilance_score is not None else rec.id_mmsi_destination
         if effective_vigilance is not None:
@@ -264,7 +317,17 @@ class VesselEnricher:
         for attr, source_fields in voyage_fields.items():
             if getattr(rec, attr, None):
                 continue
-            for source in ref_order:
+            logical_field = attr.replace("_", ".", 1)
+            # attr names map directly to the canonical voyage.* fields below.
+            logical_field = {
+                "voyage_destination": "voyage.destination",
+                "voyage_origin": "voyage.origin",
+                "voyage_departure": "voyage.departure",
+                "voyage_arrival": "voyage.arrival",
+                "voyage_eta": "voyage.eta",
+                "voyage_etd": "voyage.etd",
+            }.get(attr, logical_field)
+            for source in ref_order_for(logical_field):
                 for field in source_fields.get(source, ()):
                     value = getattr(ctx, field, None)
                     if value not in (None, ""):
@@ -405,7 +468,7 @@ class VesselEnricher:
                 continue
 
             matched_source = None
-            for source in ref_order:
+            for source in ref_order_for(logical):
                 for field in reference_candidates.get(logical, {}).get(source, ()):
                     ref_value = getattr(ctx, field, None)
                     if ref_value in (None, ""):

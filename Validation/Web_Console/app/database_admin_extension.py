@@ -153,6 +153,12 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
         if path == "/api/database/nsc/upload":
             self._database_upload_nsc()
             return
+        if path == "/api/database/folder/upload":
+            self._database_upload_folder_file()
+            return
+        if path == "/api/database/folder/finalize":
+            self._database_finalize_folder_upload()
+            return
 
         return original_post(self)
 
@@ -339,6 +345,86 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
                 {"success": False, "error": str(exc)},
                 status=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
+
+    def _folder_upload_root(self, kind, session):
+        import re
+        if kind not in ("wrs", "pans"):
+            raise ValueError("Folder upload is supported only for WRS and PANS")
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", session):
+            raise ValueError("Invalid upload session")
+        return (self.database_admin_browse_root / "imports" / kind.upper() / session).resolve()
+
+    def _safe_relative_upload_path(self, filename):
+        raw = str(filename or "").replace("\\\\", "/").strip("/")
+        parts = [p for p in raw.split("/") if p not in ("", ".")]
+        if not parts or any(p == ".." or ":" in p for p in parts):
+            raise ValueError("Invalid uploaded relative path")
+        # webkitdirectory reports the selected folder as the first path component.
+        if len(parts) > 1:
+            parts = parts[1:]
+        if not parts:
+            raise ValueError("Uploaded file has no relative path")
+        return Path(*parts)
+
+    def _database_upload_folder_file(self):
+        try:
+            query = parse_qs(urlparse(self.path).query)
+            kind = (query.get("kind") or [""])[0].strip().lower()
+            session = (query.get("session") or [""])[0].strip()
+            root = self._folder_upload_root(kind, session)
+            parts = _read_multipart(self)
+            part = parts.get("file")
+            if not part or not part.get("filename"):
+                raise ValueError("Folder upload file is missing")
+            data = part.get("data") or b""
+            if not data:
+                raise ValueError("Uploaded file is empty")
+
+            relative = self._safe_relative_upload_path(part["filename"])
+            target = (root / relative).resolve()
+            try:
+                target.relative_to(root)
+            except ValueError:
+                raise ValueError("Uploaded path escapes the import folder")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+
+            self._json_response({"success": True, "path": str(relative), "bytes": len(data)})
+        except Exception as exc:
+            self._json_response({"success": False, "error": str(exc)}, status=HTTPStatus.UNPROCESSABLE_ENTITY)
+
+    def _database_finalize_folder_upload(self):
+        try:
+            query = parse_qs(urlparse(self.path).query)
+            kind = (query.get("kind") or [""])[0].strip().lower()
+            session = (query.get("session") or [""])[0].strip()
+            root = self._folder_upload_root(kind, session)
+            if not root.exists() or not root.is_dir():
+                raise ValueError("Upload session is empty or does not exist")
+
+            if kind == "wrs":
+                path, children = _validate_folder(
+                    str(root),
+                    (
+                        ("Datasets", ("Datasets", "datasets")),
+                        ("Decode files", ("Decode files", "decode", "Decode Files", "decode files")),
+                    ),
+                )
+            else:
+                path, children = _validate_folder(str(root))
+                if not any(p.is_file() and p.suffix.lower() == ".xml" for p in path.iterdir()):
+                    raise ValueError("PANS folder must contain XML files")
+
+            self._save_config_entry(kind, str(path))
+            self._json_response({
+                "success": True,
+                "kind": kind,
+                "input_dir": str(path),
+                "children": children,
+                "message": f"{kind.upper()} folder uploaded and configured",
+            })
+        except Exception as exc:
+            self._json_response({"success": False, "error": str(exc)}, status=HTTPStatus.UNPROCESSABLE_ENTITY)
 
     def _database_upload_nsc(self):
         try:

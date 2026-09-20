@@ -176,24 +176,45 @@ def process_xml_file(conn, file_path, batch_id):
         return False
 
 class PansLiveImporter:
-    def __init__(self, config):
+    def __init__(self, config, config_path=None):
         self.config = config
+        self.config_path = Path(config_path).resolve() if config_path else None
+        self.config_mtime_ns = self.config_path.stat().st_mtime_ns if self.config_path and self.config_path.exists() else None
         self.log = logging.getLogger("pans_importer")
         self.running = False
         self.db_path = Path(project_root) / config.get('database', {}).get('pans', {}).get('path', 'Validation/Database/PANS/pans.db')
         import_cfg = config.get('imports', {}).get('pans', {})
         self.input_dir = Path(project_root) / import_cfg.get('input_dir', 'Validation/Database/PANS/RAW_DATA')
-        self.poll_interval = import_cfg.get('poll_interval_seconds', 2.0)
-        self.stability_seconds = import_cfg.get('stability_seconds', 1.0)
-        
+        self.poll_interval = float(import_cfg.get('poll_interval_seconds', 2.0))
+        self.stability_seconds = float(import_cfg.get('stability_seconds', 1.0))
+        self._apply_fallback_input_dir()
+        self.conn = None
+        self.batch_id = None
+
+    def _apply_fallback_input_dir(self):
         if not self.input_dir.exists():
-            # Fallback for testing with existing sample data
             fallback = self.input_dir.parent.parent.parent.parent / "Sample data" / "PANS"
             if fallback.exists():
                 self.input_dir = fallback
-                
-        self.conn = None
-        self.batch_id = None
+
+    def _reload_config_if_changed(self):
+        if not self.config_path or not self.config_path.exists():
+            return
+        try:
+            mtime = self.config_path.stat().st_mtime_ns
+            if self.config_mtime_ns == mtime:
+                return
+            new_config = load_config(self.config_path)
+            import_cfg = new_config.get('imports', {}).get('pans', {})
+            self.input_dir = Path(project_root) / import_cfg.get('input_dir', 'Validation/Database/PANS/RAW_DATA')
+            self.poll_interval = float(import_cfg.get('poll_interval_seconds', self.poll_interval))
+            self.stability_seconds = float(import_cfg.get('stability_seconds', self.stability_seconds))
+            self.config = new_config
+            self.config_mtime_ns = mtime
+            self._apply_fallback_input_dir()
+            self.log.info(f"Configuration reloaded. Monitoring: {self.input_dir}")
+        except Exception as exc:
+            self.log.error(f"Failed to reload database configuration: {exc}")
         
     def start(self, once=False):
         self.log.info(f"Starting PANS importer. Monitoring: {self.input_dir}")
@@ -228,10 +249,12 @@ class PansLiveImporter:
             for f in files:
                 if not self.running:
                     break
-                    
+
                 if is_file_stable(f, self.stability_seconds):
                     process_xml_file(self.conn, f, self.batch_id)
-                    
+
+            self._reload_config_if_changed()
+
             if once:
                 break
                 
@@ -255,13 +278,14 @@ def main():
     parser.add_argument("--once", action="store_true", help="Process existing files and exit")
     args = parser.parse_args()
     
+    config_path = Path(args.config).resolve() if args.config else None
     config = load_config(args.config)
     log_dir = Path(project_root) / config.get('logging', {}).get('log_dir', 'Validation/Database/logs')
     log_level = getattr(logging, config.get('logging', {}).get('level', 'INFO').upper(), logging.INFO)
     
     setup_logger("pans_importer", log_dir=log_dir, level=log_level)
     
-    importer = PansLiveImporter(config)
+    importer = PansLiveImporter(config, config_path=config_path)
     importer.start(once=args.once)
 
 if __name__ == "__main__":

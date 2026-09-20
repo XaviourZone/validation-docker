@@ -185,14 +185,24 @@ def run_import(config, dry_run=False):
     input_dir = Path(project_root) / import_config.get('input_dir', 'Validation/Database/WRS/RAW_DATA')
     batch_size = import_config.get('batch_size', 10000)
     
-    datasets_dir = input_dir / "datasets"
-    decode_dir = input_dir / "decode"
-    
+    def find_dir(parent, names):
+        wanted = {name.casefold() for name in names}
+        if not parent.is_dir():
+            return None
+        for child in parent.iterdir():
+            if child.is_dir() and child.name.casefold() in wanted:
+                return child
+        return None
+
+    datasets_dir = find_dir(input_dir, ("Datasets", "datasets"))
+    decode_dir = find_dir(input_dir, ("Decode files", "decode", "Decode Files", "decode files"))
+
     # Fallback to older directory names if present
-    if not datasets_dir.exists() and (input_dir.parent.parent.parent.parent / "Sample data" / "WRS" / "Datasets").exists():
-         datasets_dir = input_dir.parent.parent.parent.parent / "Sample data" / "WRS" / "Datasets"
-    if not decode_dir.exists() and (input_dir.parent.parent.parent.parent / "Sample data" / "WRS" / "Decode Files").exists():
-         decode_dir = input_dir.parent.parent.parent.parent / "Sample data" / "WRS" / "Decode Files"
+    sample_root = input_dir.parent.parent.parent.parent / "Sample data" / "WRS"
+    if datasets_dir is None:
+        datasets_dir = find_dir(sample_root, ("Datasets", "datasets"))
+    if decode_dir is None:
+        decode_dir = find_dir(sample_root, ("Decode Files", "Decode files", "decode", "decode files"))
     
     log.info(f"Starting WRS import. Datasets: {datasets_dir}, Decode: {decode_dir}")
     

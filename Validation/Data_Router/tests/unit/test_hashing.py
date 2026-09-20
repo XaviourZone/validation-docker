@@ -7,6 +7,7 @@ from pathlib import Path
 from Validation.Data_Router.app.utils.hashing import (
     compute_data_hash,
     compute_file_hash,
+    read_text_and_hash,
     generate_file_message_id,
     generate_tcp_message_id,
 )
@@ -25,6 +26,20 @@ class TestHashing(unittest.TestCase):
             expected_hash = compute_data_hash(content)
             actual_hash = compute_file_hash(tf_path)
             self.assertEqual(actual_hash, expected_hash)
+        finally:
+            if tf_path.exists():
+                tf_path.unlink()
+
+    def test_read_text_and_hash_matches_hash_and_decoding(self):
+        content = "419000122,13.1,80.3\n"
+        with tempfile.NamedTemporaryFile(delete=False) as tf:
+            tf.write(content.encode("utf-8"))
+            tf_path = Path(tf.name)
+
+        try:
+            text, actual_hash = read_text_and_hash(tf_path)
+            self.assertEqual(text, content)
+            self.assertEqual(actual_hash, compute_data_hash(content.encode("utf-8")))
         finally:
             if tf_path.exists():
                 tf_path.unlink()

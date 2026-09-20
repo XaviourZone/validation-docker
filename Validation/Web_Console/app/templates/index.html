@@ -45,15 +45,84 @@
     </div>
 
     <div class="view-tab" id="view-router">
-      <div class="router-header-panel"><div class="router-header-title-row"><h2>Data Router</h2></div><div class="router-status-row"><span id="router-page-status-pill" class="status-pill stopped">STOPPED</span><button id="btn-start-router" class="btn btn-success" style="display:none">Start</button></div></div>
-      <div class="panel">
-        <div class="panel-header"><span class="panel-title">Sources</span><button class="btn btn-primary" id="btn-add-source">+ Add Source</button></div>
-        <div class="sources-table-scroll-wrap"><table class="data-table sources-table" id="sources-data-table">
-          <colgroup><col class="col-src-name"><col class="col-src-enabled"><col class="col-src-type"><col class="col-src-input"><col class="col-src-parser"><col class="col-src-dest"><col class="col-src-status"><col class="col-src-activity"><col class="col-src-error"><col class="col-src-actions"></colgroup>
-          <thead><tr><th>Source</th><th>Enabled</th><th>Type</th><th>Input</th><th>Parser</th><th>Destination</th><th>Status</th><th>Last Activity</th><th>Error</th><th>Actions</th></tr></thead>
-          <tbody id="sources-table-body"></tbody>
-        </table></div>
-      </div>
+      <section class="router-hero-card">
+        <div class="router-hero-copy">
+          <div class="router-eyebrow">IMAC • VALIDATION</div>
+          <h2>Data Router</h2>
+          <p>Manage data sources and routing to parsers</p>
+        </div>
+        <div class="router-hero-actions">
+          <span id="router-page-status-pill" class="status-pill stopped">STOPPED</span>
+          <button id="btn-start-router" class="btn btn-success" style="display:none">Start</button>
+          <button class="btn btn-primary" id="btn-add-source">+ Add Source</button>
+        </div>
+      </section>
+
+      <section class="router-kpi-grid">
+        <div class="router-kpi-card">
+          <div class="router-kpi-icon router-kpi-blue">↔</div>
+          <div><div class="kpi-title">Throughput</div><div class="kpi-value" id="router-throughput">0.0 <span class="unit">msg/s</span></div></div>
+        </div>
+        <div class="router-kpi-card">
+          <div class="router-kpi-icon router-kpi-purple">≋</div>
+          <div><div class="kpi-title">Queue</div><div class="kpi-value" id="router-queue-depth">0 <span class="unit">/ 10000</span></div></div>
+        </div>
+        <div class="router-kpi-card">
+          <div class="router-kpi-icon router-kpi-green">✓</div>
+          <div><div class="kpi-title">Acknowledged</div><div class="kpi-value" id="router-ack-count">0</div></div>
+        </div>
+        <div class="router-kpi-card">
+          <div class="router-kpi-icon router-kpi-red">!</div>
+          <div><div class="kpi-title">Errors</div><div class="kpi-value" id="router-fail-count">0</div></div>
+        </div>
+      </section>
+
+      <section class="router-main-grid">
+        <div class="panel router-sources-panel">
+          <div class="panel-header router-sources-header">
+            <div>
+              <div class="router-section-title">Data Sources</div>
+              <div class="router-section-subtitle">Configured file and TCP inputs</div>
+            </div>
+            <button class="btn btn-secondary" id="btn-router-refresh" type="button">Refresh</button>
+          </div>
+          <div class="sources-table-scroll-wrap">
+            <table class="data-table sources-table" id="sources-data-table">
+              <colgroup>
+                <col class="col-src-name"><col class="col-src-enabled"><col class="col-src-type"><col class="col-src-input">
+                <col class="col-src-parser"><col class="col-src-dest"><col class="col-src-status"><col class="col-src-activity">
+                <col class="col-src-error"><col class="col-src-actions">
+              </colgroup>
+              <thead><tr><th>Source ID</th><th>Enabled</th><th>Type</th><th>Input / Connection</th><th>Parser</th><th>Destination</th><th>Status</th><th>Last Activity</th><th>Error</th><th>Actions</th></tr></thead>
+              <tbody id="sources-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside class="router-side-stack">
+          <section class="router-side-card">
+            <div class="router-side-header">
+              <div><div class="router-side-title">Router Status</div><div class="router-side-subtitle">Live service state</div></div>
+              <span class="router-live-dot" aria-hidden="true"></span>
+            </div>
+            <div class="router-status-big"><span id="router-side-status-text">Live telemetry</span></div>
+            <div class="router-side-stat"><span>Queue depth</span><strong id="router-side-queue">0</strong></div>
+            <div class="router-side-stat"><span>Messages / second</span><strong id="router-side-rate">0.0</strong></div>
+            <div class="router-side-stat"><span>Acknowledged</span><strong id="router-side-ack">0</strong></div>
+            <div class="router-side-stat"><span>Failures</span><strong id="router-side-fail">0</strong></div>
+          </section>
+
+          <section class="router-side-card router-actions-card">
+            <div class="router-side-title">Quick Actions</div>
+            <button class="router-action-row" type="button" id="btn-router-add-source">
+              <span class="router-action-icon">＋</span><span><strong>Add Source</strong><small>Create a file or TCP source</small></span><span>›</span>
+            </button>
+            <button class="router-action-row" type="button" id="btn-router-refresh-2">
+              <span class="router-action-icon">↻</span><span><strong>Refresh</strong><small>Update router telemetry</small></span><span>›</span>
+            </button>
+          </section>
+        </aside>
+      </section>
     </div>
 
     <div class="view-tab" id="view-parser">

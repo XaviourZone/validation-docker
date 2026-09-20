@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate current XML-generator scenario samples from the canonical model."""
 from pathlib import Path
+import argparse
 import shutil
 import sqlite3
 import tempfile
@@ -22,6 +23,99 @@ from Validation.Data_Parser.app.pipeline.xml_generator import XTrackXMLGenerator
 OUT_DIR = ROOT / "Validation" / "Data_Parser" / "generated_samples" / "xml_generator_scenarios"
 LEGACY_OUT = ROOT / "Validation" / "Data_Parser" / "generated_samples" / "xml_generator_samples.txt"
 REFERENCE_ROOT = ROOT / "runtime" / "reference"
+
+
+def _create_dummy_reference_root(root: Path) -> Path:
+    """Create isolated WRS/PANS/NSC DBs containing one complete test vessel.
+
+    This is deliberately separate from runtime/reference. The production
+    reference databases are never modified by the scenario generator.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+
+    wrs = sqlite3.connect(root / "wrs.db")
+    wrs.executescript("""
+        CREATE TABLE wrs_datasets_vessels (
+            VESSEL_ID TEXT, MMSI TEXT, IMO TEXT, VESSEL_NAME TEXT,
+            CALL_SIGN TEXT, VESSEL_TYPE TEXT, STATUS TEXT, GROSS REAL
+        );
+        CREATE TABLE wrs_decode_vessel_status (STATUS TEXT, STATUS_DECODE TEXT);
+        CREATE TABLE wrs_datasets_vessel_dimensions (
+            VESSEL_ID TEXT, LOA REAL, BREADTH_EXTREME REAL, DRAFT REAL
+        );
+        CREATE TABLE wrs_datasets_vigilance (VESSEL_ID TEXT, SCORE REAL);
+        CREATE TABLE wrs_decode_ais_type_cargo (ID INTEGER, DESCRIPTION TEXT);
+        CREATE TABLE wrs_datasets_callings (
+            VESSEL_ID TEXT, PLACE TEXT, ARRIVAL_DATE TEXT,
+            SAILING_DATE TEXT, LAST_UPDATED_DATE TEXT
+        );
+        CREATE TABLE wrs_datasets_aisspoofing_risk (
+            VESSEL_ID TEXT, START_DATE TEXT, END_DATE TEXT,
+            RISK_INDICATORS TEXT, START_LOCATION TEXT, END_LOCATION TEXT
+        );
+        CREATE TABLE wrs_datasets_ais_gap_risk (
+            VESSEL_ID TEXT, START_DATE TEXT, END_DATE TEXT,
+            RISK_INDICATORS TEXT, HIGH_RISK_AREA TEXT
+        );
+        CREATE TABLE wrs_datasets_ais_mnptn_risk (
+            VESSEL_ID TEXT, MMSI_NUMBER TEXT, RELATED_VESSEL_NAME TEXT,
+            RISK_INDICATORS TEXT, START_DATE TEXT, END_DATE TEXT
+        );
+        CREATE TABLE wrs_datasets_vessel_sanctions (
+            VESSEL_ID TEXT, SOURCE TEXT, PROGRAM TEXT,
+            FIRST_PUBLISHED TEXT, LAST_PUBLISHED TEXT,
+            START_DATE TEXT, END_DATE TEXT
+        );
+        INSERT INTO wrs_datasets_vessels VALUES
+            ('DUMMY-001','999123456','9999999','DUMMY CROSSREF VESSEL','DMY123','TANKER','ACTIVE',12345.0);
+        INSERT INTO wrs_decode_vessel_status VALUES ('ACTIVE','ACTIVE');
+        INSERT INTO wrs_datasets_vessel_dimensions VALUES ('DUMMY-001',210.5,32.4,11.2);
+        INSERT INTO wrs_datasets_vigilance VALUES ('DUMMY-001',72.0);
+        INSERT INTO wrs_decode_ais_type_cargo VALUES (80,'TANKER');
+        INSERT INTO wrs_datasets_callings VALUES ('DUMMY-001','INBOM1','2026-09-19','2026-09-20','2026-09-20');
+        INSERT INTO wrs_datasets_aisspoofing_risk VALUES ('DUMMY-001','2026-09-01','2026-09-10','MMSI mismatch','INDIAN OCEAN','ARABIAN SEA');
+        INSERT INTO wrs_datasets_ais_gap_risk VALUES ('DUMMY-001','2026-08-01','2026-08-02','Transmission gap','HIGH RISK AREA');
+        INSERT INTO wrs_datasets_vessel_sanctions VALUES ('DUMMY-001','TEST','TEST PROGRAM','2026-01-01','2026-09-01','2026-01-01','2026-12-31');
+    """)
+    wrs.commit(); wrs.close()
+
+    pans = sqlite3.connect(root / "pans.db")
+    pans.executescript("""
+        CREATE TABLE pans_vespro (
+            MMSINumber TEXT, IMONumber TEXT, VesselName TEXT, CallSign TEXT,
+            Beam REAL, LOA REAL, MaxDraft REAL, GRT REAL, VesselType TEXT
+        );
+        CREATE TABLE pans_calinv (_id INTEGER, IMONumber TEXT, VCN TEXT);
+        CREATE TABLE pans_calinf (
+            _id INTEGER, IMONumber TEXT, CallSign TEXT,
+            OriginalPortOfDep TEXT, LastPortOfCall TEXT, DockORTOCode TEXT,
+            EDTA TEXT, EDTD TEXT
+        );
+        CREATE TABLE pans_berman (
+            _id INTEGER, IMONumber TEXT, CallSign TEXT,
+            DestinationPortl TEXT, Portcode TEXT, EDTA TEXT, EDTD TEXT,
+            DraftFwd REAL, DraftAft REAL, VCN TEXT, CargoDescription TEXT,
+            TotalCargoTonnage REAL, HazCargoOnBoard TEXT
+        );
+        INSERT INTO pans_vespro VALUES
+            ('999123456','9999999','DUMMY CROSSREF VESSEL','DMY123',32.4,210.5,11.2,12345.0,'TANKER');
+        INSERT INTO pans_calinv VALUES (1,'9999999','INBOM120269999');
+        INSERT INTO pans_calinf VALUES (1,'9999999','DMY123','INNSA1','INBOM1','INBOM1','2026-09-21T10:00:00','2026-09-20T08:00:00');
+        INSERT INTO pans_berman VALUES (1,'9999999','DMY123','INBOM1','INBOM1','2026-09-21T10:00:00','2026-09-20T08:00:00',10.8,11.0,'INBOM120269999','BASE OIL',8827.0,'Y');
+    """)
+    pans.commit(); pans.close()
+
+    nsc = sqlite3.connect(root / "nsc.db")
+    nsc.executescript("""
+        CREATE TABLE nsc_vessels (
+            ID_MMSI TEXT, ID_IMO TEXT, VESSEL_NAME TEXT, ID_CALLSIGN TEXT,
+            TYPE TEXT, SOURCE_REGION TEXT, BEGIN_DATE TEXT, END_DATE TEXT
+        );
+        INSERT INTO nsc_vessels VALUES
+            ('999123456','9999999','DUMMY CROSSREF VESSEL','DMY123','TANKER','WEST','2026-01-01 00:00:00','2026-12-31 23:59:59');
+    """)
+    nsc.commit(); nsc.close()
+    return root
 
 
 SOURCE_IDS = {
@@ -325,6 +419,16 @@ def enrich_scenario(rec: CommonVesselRecord):
 
 
 def main():
+    global REFERENCE_ROOT
+
+    parser = argparse.ArgumentParser(description="Generate XML generator scenario samples.")
+    parser.add_argument(
+        "--seed-dummy-reference",
+        action="store_true",
+        help="Use isolated dummy WRS/PANS/NSC databases containing one complete cross-reference vessel.",
+    )
+    args = parser.parse_args()
+
     gen = XTrackXMLGenerator()
     # This directory is dedicated to generated scenarios, so rebuild it
     # completely to prevent stale/old XML samples from being mistaken for
@@ -339,10 +443,16 @@ def main():
         "Each XML is generated by the current normalizer + VesselEnricher + XTrackXMLGenerator.",
         "Old Sample_xmls XML is NOT copied.",
         "Reference enrichment uses the current WRS/PANS/NSC SQLite databases when available.",
+        "Use --seed-dummy-reference to test WRS/PANS/NSC correlation against isolated synthetic reference data; live DBs are never modified.",
         "Scenarios 04/05 use a dynamically discovered reference-backed identity when one exists.",
         "Each scenario uses an isolated temporary TrackStateDB; operator state is not modified.",
         "",
     ]
+
+    if args.seed_dummy_reference:
+        dummy_root = Path(tempfile.mkdtemp(prefix="validation-dummy-reference-"))
+        REFERENCE_ROOT = _create_dummy_reference_root(dummy_root)
+        print(f"DUMMY REFERENCE ROOT: {REFERENCE_ROOT}")
 
     reference_anchor = discover_reference_anchor()
     total = 0

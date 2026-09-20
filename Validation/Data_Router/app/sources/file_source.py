@@ -39,7 +39,11 @@ class FileSourceManager(BaseSource):
 
         raw_folder = Path(config.folder)
         if raw_folder.is_absolute():
-            self.folder_path = raw_folder
+            host_mount = os.environ.get("VALIDATION_HOST_FILESYSTEM_ROOT", "").strip()
+            if host_mount:
+                self.folder_path = Path(host_mount) / str(raw_folder).lstrip("/\\")
+            else:
+                self.folder_path = raw_folder
         else:
             self.folder_path = base_inflow_dir / raw_folder
 

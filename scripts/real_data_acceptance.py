@@ -230,6 +230,7 @@ def db_counts(paths: dict[str, Path]) -> dict:
 
 def run_source(processor: PipelineProcessor, source: str, paths: list[Path], output_dir: Path) -> dict:
     stats = Counter()
+    provenance = {field: Counter() for field in CANONICAL_FIELDS}
     started = time.monotonic()
     xml_files_before = len(list(output_dir.glob("*.xml")))
 
@@ -262,6 +263,10 @@ def run_source(processor: PipelineProcessor, source: str, paths: list[Path], out
             else:
                 stats["other_error_count"] += 1
         stats["failed_envelopes"] += int(not result.success)
+        for record in result.records:
+            for field, source_name in (record.raw_attributes.get("enrichment_provenance") or {}).items():
+                if field in provenance:
+                    provenance[field][source_name] += 1
         if result.errors:
             stats.setdefault("error_samples", [])
             stats["error_samples"].extend(result.errors[:10])
@@ -273,6 +278,7 @@ def run_source(processor: PipelineProcessor, source: str, paths: list[Path], out
     stats["records_per_second"] = round(
         stats["records_parsed"] / stats["elapsed_seconds"], 2
     ) if stats["elapsed_seconds"] else 0
+    stats["provenance"] = {field: dict(counts) for field, counts in provenance.items()}
     return dict(stats)
 
 
@@ -354,12 +360,18 @@ def main() -> int:
             )
 
         reference_missing = [name for name, path in refs.items() if not path.exists()]
+        overall_provenance = {field: Counter() for field in CANONICAL_FIELDS}
+        for source_result in source_results.values():
+            for field, counts in source_result.get("provenance", {}).items():
+                for source_name, count in counts.items():
+                    overall_provenance[field][source_name] += count
         report = {
             "acceptance_time_utc": datetime.now(timezone.utc).isoformat(),
             "sample_root": str(sample_root),
             "reference_databases": db_counts(refs),
             "sources": source_results,
             "xml_coverage": xml_coverage(xml_dir),
+            "provenance": {field: dict(counts) for field, counts in overall_provenance.items()},
             "status": "FAIL" if reference_missing else "PASS",
             "reference_missing": reference_missing,
         }
@@ -409,6 +421,20 @@ def main() -> int:
                 f"{value.get('enrichment_error_count', 0)} | "
                 f"{value.get('xml_error_count', 0)} | "
                 f"{value.get('other_error_count', 0)} |"
+            )
+        lines += [
+            "",
+            "## Enrichment provenance",
+            "",
+            "| XML field | Incoming | WRS | PANS | NSC | Derived | None |",
+            "|---|---:|---:|---:|---:|---:|---:|",
+        ]
+        for field in CANONICAL_FIELDS:
+            counts = report["provenance"].get(field, {})
+            lines.append(
+                f"| {field} | {counts.get('INCOMING', 0)} | {counts.get('WRS', 0)} | "
+                f"{counts.get('PANS', 0)} | {counts.get('NSC', 0)} | "
+                f"{counts.get('DERIVED', 0)} | {counts.get('NONE', 0)} |"
             )
         lines += [
             "",

@@ -152,7 +152,7 @@
                 "&relative_path=" + encodeURIComponent(relative) +
                 "&offset=" + offset +
                 "&total_size=" + totalSize,
-                {method: "PUT", headers: {"Content-Type": "application/octet-stream", "Content-Length": String(chunk.size)}, body: chunk}
+                {method: "PUT", headers: {"Content-Type": "application/octet-stream"}, body: chunk}
               );
               offset = Number(response.offset || chunkEnd);
               completed = true;

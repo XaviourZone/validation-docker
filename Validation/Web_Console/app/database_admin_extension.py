@@ -523,6 +523,14 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
             if not uploads:
                 raise ValueError("Select at least one NSC EAST or NSC WEST file")
 
+            database_client = getattr(self, "database_client", None)
+            if database_client and database_client.active_operations.get("nsc"):
+                self._json_response(
+                    {"success": False, "error": "NSC database update is already running. Wait for it to finish before uploading another file."},
+                    status=HTTPStatus.CONFLICT,
+                )
+                return
+
             cfg = self._read_database_config()
             root_value = str(
                 (cfg.get("imports", {}) or {})
@@ -574,9 +582,10 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
                     except FileNotFoundError:
                         pass
 
+                if not target.exists():
+                    raise RuntimeError(f"NSC upload target was not created: {target}")
                 saved[region] = str(target)
 
-            database_client = getattr(self, "database_client", None)
             refresh = database_client.refresh_nsc() if database_client else None
 
             self._json_response(

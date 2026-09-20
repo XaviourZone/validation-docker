@@ -41,7 +41,8 @@ sources:
     poll_interval_seconds: 1.0
     stability_window_seconds: 1.0
     file_patterns: ["*.csv", "*.txt", "*"]
-    preserve_file: true
+    preserve_file: false
+    processed_folder: processed
   SAIS_GLOBAL:
     type: file
     folder: SAIS_GLOBAL
@@ -50,7 +51,8 @@ sources:
     poll_interval_seconds: 1.0
     stability_window_seconds: 1.0
     file_patterns: ["*.csv", "*.txt", "*"]
-    preserve_file: true
+    preserve_file: false
+    processed_folder: processed
   MSIS:
     type: file
     folder: MSIS
@@ -59,7 +61,8 @@ sources:
     poll_interval_seconds: 1.0
     stability_window_seconds: 1.0
     file_patterns: ["*.csv", "*.txt", "*"]
-    preserve_file: true
+    preserve_file: false
+    processed_folder: processed
   LRIT:
     type: file
     folder: LRIT
@@ -68,7 +71,8 @@ sources:
     poll_interval_seconds: 1.0
     stability_window_seconds: 1.0
     file_patterns: ["*.csv", "*.txt", "*"]
-    preserve_file: true
+    preserve_file: false
+    processed_folder: processed
   VATMS_EAST:
     type: tcp
     remote_host: host.docker.internal

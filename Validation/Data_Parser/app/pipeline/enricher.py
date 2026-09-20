@@ -358,10 +358,9 @@ class VesselEnricher:
 
 
         # Vessel remarks are a structured intelligence summary.
-        # Reference-source status is always shown; source-specific details are
-        # included only when that source matched the vessel.
-        # Vigilance Score is deliberately excluded because it already populates
-        # id.mmsi.destination.
+        # Keep the selected source-aligned intelligence fields visible in the
+        # XML vessel.remarks field. Incoming/operator remarks are preserved
+        # separately above; reference values never overwrite live fields.
         def remark_line(source: str, label: str, value: str) -> str:
             return f"{source:<8} | {label:<18} : {value}"
 
@@ -370,116 +369,91 @@ class VesselEnricher:
                 return default
             return " ".join(str(value).strip().split())
 
-        reference_mmsi = next(
-            (v for v in (ctx.nsc_mmsi, ctx.pans_mmsi, ctx.wrs_mmsi) if v and is_valid_mmsi(v)),
-            None,
-        )
-        reference_imo = next(
-            (v for v in (ctx.nsc_imo, ctx.pans_imo, ctx.wrs_imo) if v and is_valid_imo(v)),
-            None,
-        )
-        reference_name = next(
-            (v for v in (ctx.nsc_vessel_name, ctx.pans_vessel_name, ctx.wrs_vessel_name)
-             if v and str(v).strip().upper() not in ("UNKNOWN", "-", "N/A", "NONE")),
-            None,
-        )
+        def format_remark_date(value):
+            value = clean_remark_value(value, "")
+            if not value:
+                return ""
+            # NSC dates are normally ISO/date strings. Keep unknown formats
+            # unchanged rather than guessing.
+            for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f"):
+                try:
+                    from datetime import datetime
+                    return datetime.strptime(value, fmt).strftime("%d-%m-%Y")
+                except ValueError:
+                    pass
+            return value
 
         remarks_lines: List[str] = []
 
         if rec.vessel_remarks and rec.vessel_remarks not in ("-", "None"):
-            # Preserve an incoming operator remark, but keep it structurally
-            # separated from the generated reference intelligence.
             for incoming_remark in str(rec.vessel_remarks).splitlines():
                 incoming_remark = incoming_remark.strip()
                 if incoming_remark:
                     remarks_lines.append(remark_line("INCOMING", "REMARKS", incoming_remark))
 
-        remarks_lines.append(remark_line("NSC", "CLEARED", "YES" if ctx.nsc_matched else "NO MATCH"))
-        if ctx.nsc_matched:
-            if ctx.nsc_region:
-                remarks_lines.append(remark_line("NSC", "REGION", clean_remark_value(ctx.nsc_region)))
-            if ctx.nsc_begin_date or ctx.nsc_end_date:
-                validity = f"{clean_remark_value(ctx.nsc_begin_date, 'UNKNOWN')} TO {clean_remark_value(ctx.nsc_end_date, 'UNKNOWN')}"
-                remarks_lines.append(remark_line("NSC", "VALIDITY", validity))
-
-        remarks_lines.append("")
-        remarks_lines.append(remark_line("PANS", "CLEARED", "YES" if ctx.pans_matched else "NO MATCH"))
-        if ctx.pans_matched:
-            voyage_parts = []
-            destination = ctx.pans_berman_dest or ctx.pans_npc or ctx.pans_npc
-            if destination: voyage_parts.append(f"NEXT PORT={clean_remark_value(destination)}")
-            if ctx.pans_eta or ctx.pans_berman_eta: voyage_parts.append(f"ETA={clean_remark_value(ctx.pans_eta or ctx.pans_berman_eta)}")
-            if ctx.pans_etd or ctx.pans_berman_etd: voyage_parts.append(f"ETD={clean_remark_value(ctx.pans_etd or ctx.pans_berman_etd)}")
-            if ctx.pans_vcn: voyage_parts.append(f"VCN={clean_remark_value(ctx.pans_vcn)}")
-            if voyage_parts:
-                remarks_lines.append(remark_line("PANS", "VOYAGE", " | ".join(voyage_parts)))
-
-            cargo_parts = []
-            if ctx.pans_cargo_description: cargo_parts.append(clean_remark_value(ctx.pans_cargo_description))
-            if ctx.pans_cargo_tonnage is not None: cargo_parts.append(f"{ctx.pans_cargo_tonnage:g} MT")
-            if ctx.pans_hazardous: cargo_parts.append(f"HAZARDOUS={'YES' if str(ctx.pans_hazardous).upper() in ('Y','YES','TRUE','1') else 'NO'}")
-            if cargo_parts:
-                remarks_lines.append(remark_line("PANS", "CARGO", " | ".join(cargo_parts)))
-
-        remarks_lines.append("")
-        remarks_lines.append(remark_line("WRS", "CLEARED", "YES" if ctx.wrs_matched else "NO MATCH"))
-        if ctx.wrs_matched:
-            remarks_lines.append(remark_line(
-                "WRS", "AIS SPOOFING RISK",
-                clean_remark_value(ctx.wrs_ais_spoofing_detail, "NONE"),
-            ))
-            remarks_lines.append(remark_line(
-                "WRS", "AIS GAP RISK",
-                clean_remark_value(ctx.wrs_ais_gap_detail, "NONE"),
-            ))
-            remarks_lines.append(remark_line(
-                "WRS", "AIS IDENTITY RISK",
-                clean_remark_value(ctx.wrs_ais_identity_detail, "NONE"),
-            ))
-            remarks_lines.append(remark_line(
-                "WRS", "SANCTIONS",
-                clean_remark_value(ctx.wrs_sanctions_detail, "NONE"),
-            ))
-
-        remarks_lines.append("")
-        transmitted_mmsi = clean_remark_value(incoming_mmsi)
-        transmitted_imo = clean_remark_value(incoming_imo)
-        transmitted_name = clean_remark_value(incoming_name)
-
-        mmsi_spoofing = (
-            reference_mmsi is not None
-            and incoming_mmsi is not None
-            and str(incoming_mmsi).strip() != str(reference_mmsi).strip()
-        )
-        imo_spoofing = (
-            reference_imo is not None
-            and incoming_imo is not None
-            and str(incoming_imo).strip() != str(reference_imo).strip()
-        )
-        normalized_transmitted_name = " ".join(str(incoming_name or "").strip().upper().split())
-        normalized_reference_name = " ".join(str(reference_name or "").strip().upper().split())
-        name_spoofing = (
-            bool(normalized_transmitted_name)
-            and normalized_transmitted_name not in ("UNKNOWN", "-", "N/A", "NONE")
-            and bool(normalized_reference_name)
-            and normalized_transmitted_name not in normalized_reference_name
-            and normalized_reference_name not in normalized_transmitted_name
-        )
-
+        # WRS intelligence: the four selected WRS remark categories.
         remarks_lines.append(remark_line(
-            "SPOOFING", "MMSI",
-            f"{'DETECTED' if mmsi_spoofing else 'NONE'} | TRANSMITTING={transmitted_mmsi} | ACTUAL={clean_remark_value(reference_mmsi)}",
+            "WRS", "AIS SPOOFING RISK",
+            clean_remark_value(ctx.wrs_ais_spoofing_detail, "NONE"),
         ))
         remarks_lines.append(remark_line(
-            "SPOOFING", "IMO",
-            f"{'DETECTED' if imo_spoofing else 'NONE'} | TRANSMITTING={transmitted_imo} | ACTUAL={clean_remark_value(reference_imo)}",
+            "WRS", "AIS GAP RISK",
+            clean_remark_value(ctx.wrs_ais_gap_detail, "NONE"),
         ))
         remarks_lines.append(remark_line(
-            "SPOOFING", "NAME",
-            f"{'DETECTED' if name_spoofing else 'NONE'} | TRANSMITTING={transmitted_name} | ACTUAL={clean_remark_value(reference_name)}",
+            "WRS", "VIGILANCE SCORE",
+            clean_remark_value(ctx.wrs_vigilance_score, "NONE"),
+        ))
+        remarks_lines.append(remark_line(
+            "WRS", "SANCTIONS",
+            clean_remark_value(ctx.wrs_sanctions_detail, "NONE"),
         ))
 
-        remarks_lines.append("")
+        # PANS intelligence: current/latest voyage and cargo/hazardous cargo.
+        voyage_parts = []
+        destination = ctx.pans_berman_dest or ctx.pans_npc
+        if destination:
+            voyage_parts.append(f"NEXT PORT={clean_remark_value(destination)}")
+        if ctx.pans_eta or ctx.pans_berman_eta:
+            voyage_parts.append(f"ETA={clean_remark_value(ctx.pans_eta or ctx.pans_berman_eta)}")
+        if ctx.pans_etd or ctx.pans_berman_etd:
+            voyage_parts.append(f"ETD={clean_remark_value(ctx.pans_etd or ctx.pans_berman_etd)}")
+        if ctx.pans_vcn:
+            voyage_parts.append(f"VCN={clean_remark_value(ctx.pans_vcn)}")
+        remarks_lines.append(remark_line(
+            "PANS", "VOYAGE",
+            " | ".join(voyage_parts) if voyage_parts else "UNAVAILABLE",
+        ))
+
+        cargo_parts = []
+        if ctx.pans_cargo_description:
+            cargo_parts.append(clean_remark_value(ctx.pans_cargo_description))
+        if ctx.pans_cargo_tonnage is not None:
+            cargo_parts.append(f"{ctx.pans_cargo_tonnage:g} MT")
+        if ctx.pans_hazardous:
+            cargo_parts.append(
+                f"HAZARDOUS={'YES' if str(ctx.pans_hazardous).upper() in ('Y','YES','TRUE','1') else 'NO'}"
+            )
+        remarks_lines.append(remark_line(
+            "PANS", "CARGO",
+            " | ".join(cargo_parts) if cargo_parts else "UNAVAILABLE",
+        ))
+
+        # NSC intelligence: region and validity window.
+        remarks_lines.append(remark_line(
+            "NSC", "REGION",
+            clean_remark_value(ctx.nsc_region, "UNAVAILABLE"),
+        ))
+        validity_start = format_remark_date(ctx.nsc_begin_date)
+        validity_end = format_remark_date(ctx.nsc_end_date)
+        validity = ""
+        if validity_start or validity_end:
+            validity = f"{validity_start or 'UNKNOWN'} TO {validity_end or 'UNKNOWN'}"
+        remarks_lines.append(remark_line(
+            "NSC", "VALIDITY",
+            validity or "UNAVAILABLE",
+        ))
+
         remarks_lines.append(remark_line("SOURCE", "FEED", get_source_label(rec.source_name)))
         rec.vessel_remarks = "\n".join(remarks_lines)
 

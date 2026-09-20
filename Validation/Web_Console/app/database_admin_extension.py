@@ -122,6 +122,7 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
 
     original_get = handler_class.do_GET
     original_post = handler_class.do_POST
+    original_put = getattr(handler_class, "do_PUT", None)
 
     def do_get(self):
         path = urlparse(self.path).path
@@ -535,12 +536,14 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
                         fh.write(block)
                         remaining -= len(block)
                     fh.flush()
-                    os.fsync(fh.fileno())
                 next_offset = offset + content_length
             else:
                 raise ValueError(f"Upload offset mismatch: server has {current} bytes, client sent offset {offset}")
 
             if next_offset == total_size:
+                with part_path.open("ab") as fh:
+                    fh.flush()
+                    os.fsync(fh.fileno())
                 os.replace(part_path, target)
                 self.database_admin_logger.info(
                     "Folder upload file completed: kind=%s session=%s path=%s bytes=%s",
@@ -753,8 +756,18 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
                 status=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
 
+    def do_put(self):
+        path = urlparse(self.path).path
+        if path == "/api/database/folder/upload-chunk":
+            self._database_upload_folder_chunk()
+            return
+        if original_put is not None:
+            return original_put(self)
+        self.send_error(HTTPStatus.NOT_IMPLEMENTED, "PUT not implemented")
+
     handler_class.do_GET = do_get
     handler_class.do_POST = do_post
+    handler_class.do_PUT = do_put
     handler_class._browse_roots = _browse_roots
     handler_class._database_browse = _database_browse
     handler_class._read_database_config = _read_database_config

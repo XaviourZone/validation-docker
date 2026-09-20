@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RPM_DIR="${ROOT}/offline/docker-rpms"
 IMAGE_TAR="${ROOT}/offline/images/validation-parser-dev.tar"
+BASE_TAR="${ROOT}/offline/images/python-3.14-slim.tar"
 
 echo "=== Validation Offline Production Installer ==="
 
@@ -35,6 +36,9 @@ sudo dnf install -y "${RPM_DIR}"/*.rpm
 
 echo "[3/3] Enabling Docker and loading Validation image..."
 sudo systemctl enable --now docker
+if [[ -f "${BASE_TAR}" ]]; then
+  sudo docker load -i "${BASE_TAR}"
+fi
 sudo docker load -i "${IMAGE_TAR}"
 
 docker --version

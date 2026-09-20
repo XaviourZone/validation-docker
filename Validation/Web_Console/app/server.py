@@ -243,6 +243,18 @@ class WebConsoleHandler(SimpleHTTPRequestHandler):
             self._json_response(resp, status=HTTPStatus.OK if success else HTTPStatus.UNPROCESSABLE_ENTITY)
             return
 
+        if path == "/api/router/sources/rename":
+            old_name = str(body.get("old_source_name") or "").strip()
+            new_name = str(body.get("new_source_name") or "").strip()
+            success, msg = self.config_manager.rename_source(old_name, new_name)
+            self._json_response({
+                "success": success,
+                "message": msg,
+                "reload_required": True,
+                "source": new_name if success else old_name,
+            }, status=HTTPStatus.OK if success else HTTPStatus.UNPROCESSABLE_ENTITY)
+            return
+
         # Delete source
         match_delete = re.match(r"^/api/router/sources/([^/]+)/delete$", path)
         if match_delete:

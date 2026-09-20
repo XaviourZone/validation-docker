@@ -536,3 +536,5 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
     handler_class._database_reference_config = _database_reference_config
     handler_class._database_save_reference_folder = _database_save_reference_folder
     handler_class._database_upload_nsc = _database_upload_nsc
+    handler_class._database_upload_folder_file = _database_upload_folder_file
+    handler_class._database_finalize_folder_upload = _database_finalize_folder_upload

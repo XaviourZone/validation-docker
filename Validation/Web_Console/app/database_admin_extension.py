@@ -162,6 +162,9 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
         if path == "/api/database/folder/upload-batch":
             self._database_upload_folder_batch()
             return
+        if path == "/api/database/folder/upload-chunk":
+            self._database_upload_folder_chunk()
+            return
         if path == "/api/database/folder/finalize":
             self._database_finalize_folder_upload()
             return
@@ -477,6 +480,78 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
                 {"success": False, "error": str(exc)},
                 status=HTTPStatus.UNPROCESSABLE_ENTITY,
             )
+
+    def _database_upload_folder_chunk(self):
+        """Receive one bounded raw file chunk and append it directly to disk."""
+        try:
+            query = parse_qs(urlparse(self.path).query)
+            kind = (query.get("kind") or [""])[0].strip().lower()
+            session = (query.get("session") or [""])[0].strip()
+            relative_name = (query.get("relative_path") or [""])[0]
+            offset = int((query.get("offset") or ["0"])[0])
+            total_size = int((query.get("total_size") or ["-1"])[0])
+
+            if offset < 0 or total_size < 0 or offset > total_size:
+                raise ValueError("Invalid upload offset or total size")
+
+            root = self._folder_upload_root(kind, session)
+            relative = self._safe_relative_upload_path(relative_name)
+            target = (root / relative).resolve()
+            try:
+                target.relative_to(root)
+            except ValueError:
+                raise ValueError("Uploaded path escapes the import folder")
+
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length <= 0:
+                raise ValueError("Upload chunk is empty")
+            max_chunk = int(os.environ.get("VALIDATION_UPLOAD_CHUNK_BYTES", str(8 * 1024 * 1024)))
+            if content_length > max_chunk:
+                raise ValueError(f"Upload chunk exceeds maximum size of {max_chunk // (1024 * 1024)} MB")
+            if offset + content_length > total_size:
+                raise ValueError("Upload chunk exceeds declared file size")
+
+            target.parent.mkdir(parents=True, exist_ok=True)
+            part_path = target.with_name(target.name + ".part")
+
+            if target.exists():
+                current = target.stat().st_size
+                if current == total_size:
+                    self._json_response({"success": True, "complete": True, "path": str(relative), "offset": total_size, "total_size": total_size})
+                    return
+                raise ValueError("Final file exists with an unexpected size")
+
+            current = part_path.stat().st_size if part_path.exists() else 0
+
+            if current == offset + content_length:
+                next_offset = current
+            elif current == offset:
+                remaining = content_length
+                with part_path.open("ab") as fh:
+                    while remaining:
+                        block = self.rfile.read(min(1024 * 1024, remaining))
+                        if not block:
+                            raise ConnectionError("Upload connection ended before chunk completed")
+                        fh.write(block)
+                        remaining -= len(block)
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                next_offset = offset + content_length
+            else:
+                raise ValueError(f"Upload offset mismatch: server has {current} bytes, client sent offset {offset}")
+
+            if next_offset == total_size:
+                os.replace(part_path, target)
+                self.database_admin_logger.info(
+                    "Folder upload file completed: kind=%s session=%s path=%s bytes=%s",
+                    kind, session, relative, total_size
+                )
+                self._json_response({"success": True, "complete": True, "path": str(relative), "offset": total_size, "total_size": total_size})
+            else:
+                self._json_response({"success": True, "complete": False, "path": str(relative), "offset": next_offset, "total_size": total_size})
+        except Exception as exc:
+            self.database_admin_logger.error("Folder upload chunk failed: %s", exc, exc_info=True)
+            self._json_response({"success": False, "error": str(exc)}, status=HTTPStatus.UNPROCESSABLE_ENTITY)
 
     def _database_finalize_folder_upload(self):
         try:

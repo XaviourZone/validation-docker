@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Validation</title>
   <link rel="stylesheet" href="/static/css/console.css">
-  <link rel="stylesheet" href="/static/css/minimal.css?v=20260920-r9">
+  <link rel="stylesheet" href="/static/css/minimal.css?v=20260920-r10">
 </head>
 <body>
 <div class="app-loading-overlay" id="app-loading-overlay" aria-live="polite" aria-busy="true"><div class="app-loading-card"><div class="app-loading-spinner" aria-hidden="true"></div><div><div class="app-loading-title" id="app-loading-title">Starting Validation</div><div class="app-loading-subtitle" id="app-loading-subtitle">Connecting to local services…</div></div></div></div>
@@ -98,30 +98,6 @@
             </table>
           </div>
         </div>
-
-        <aside class="router-side-stack">
-          <section class="router-side-card">
-            <div class="router-side-header">
-              <div><div class="router-side-title">Router Status</div><div class="router-side-subtitle">Live service state</div></div>
-              <span class="router-live-dot" aria-hidden="true"></span>
-            </div>
-            <div class="router-status-big"><span id="router-side-status-text">Live telemetry</span></div>
-            <div class="router-side-stat"><span>Queue depth</span><strong id="router-side-queue">0</strong></div>
-            <div class="router-side-stat"><span>Messages / second</span><strong id="router-side-rate">0.0</strong></div>
-            <div class="router-side-stat"><span>Acknowledged</span><strong id="router-side-ack">0</strong></div>
-            <div class="router-side-stat"><span>Failures</span><strong id="router-side-fail">0</strong></div>
-          </section>
-
-          <section class="router-side-card router-actions-card">
-            <div class="router-side-title">Quick Actions</div>
-            <button class="router-action-row" type="button" id="btn-router-add-source">
-              <span class="router-action-icon">＋</span><span><strong>Add Source</strong><small>Create a file or TCP source</small></span><span>›</span>
-            </button>
-            <button class="router-action-row" type="button" id="btn-router-refresh-2">
-              <span class="router-action-icon">↻</span><span><strong>Refresh</strong><small>Update router telemetry</small></span><span>›</span>
-            </button>
-          </section>
-        </aside>
       </section>
     </div>
 

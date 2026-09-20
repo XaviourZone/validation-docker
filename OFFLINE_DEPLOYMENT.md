@@ -59,31 +59,64 @@ The installer:
 - installs the bundled Docker static binaries;
 - installs the bundled Compose plugin;
 - creates/starts a systemd Docker service;
+- enables Docker to start at host boot;
 - loads the prebuilt Validation image;
 - creates the runtime directories;
 - starts the complete stack with `--no-build`;
 - does not pull anything from the Internet.
 
-## Subsequent starts
+All Validation services use `restart: unless-stopped`, so after a normal VM reboot, Docker will bring the existing containers back up automatically.
 
-After the first installation:
+## Normal operation after installation
+
+For a normal start/restart, use:
 
 ```bash
 cd validation-offline-ubuntu1804
-sudo ./install/install_and_start.sh
+sudo ./project/scripts/start_offline.sh
 ```
 
-or:
+This starts the existing stack with:
 
-```bash
-./install/install_and_start.sh
+```text
+docker compose up -d --no-build
 ```
 
-For a normal restart without reinstalling Docker:
+It does **not** build, pull, or force-recreate the containers.
 
-```bash
-./project/scripts/start_offline.sh
+If the VM is shut down and later powered on again, the Docker service starts automatically and the Validation containers are configured to restart.
+
+## Existing runtime state
+
+The persistent runtime state is kept under:
+
+```text
+validation-offline-ubuntu1804/project/runtime/
 ```
+
+This includes the configured runtime databases/state, router state/logs, parser state/logs, forwarder state, spool directories and reference data mounted by the services.
+
+Stopping or rebooting the VM does not intentionally delete this state.
+
+Do **not** delete the `project/runtime/` directory if the existing operational state needs to be retained.
+
+## Host folder selection
+
+The Web Console Data Router provides operator folder browsing/configuration.
+
+The Router and Web Console expose the host filesystem inside the containers at:
+
+```text
+/opt/validation/hostfs
+```
+
+with the host root mapped from `/`.
+
+The mount is read-only. This is intentional for the folder browser and for reading existing incoming files; it does not grant the application permission to modify arbitrary host directories.
+
+A selected absolute host folder is translated to the corresponding path inside the container and can be monitored by the Router when that folder is accessible to the Docker container.
+
+For incoming folders that must be writable by Validation itself, use the configured Validation runtime/data-inflow locations or provide an explicit writable bind mount rather than changing the host filesystem mount to writable globally.
 
 ## Services
 

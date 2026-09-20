@@ -188,8 +188,28 @@ class TestValidationPipeline(unittest.TestCase):
         self.assertFalse(self.state_db.is_active(200000002))
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 5. Reference Fallback Priority (Incoming -> WRS -> PANS -> NSC -> UNKNOWN)
+    # 5. Field-Specific Reference Fallback Priority
+#    Incoming is always first; reference order is selected by XML field.
     # ──────────────────────────────────────────────────────────────────────────
+
+    def test_field_specific_reference_priority(self):
+        from Validation.Data_Parser.app.pipeline.enricher import _reference_order
+
+        # Vessel identity fields: NSC -> PANS -> WRS
+        self.assertEqual(_reference_order("vessel.name"), ("NSC", "PANS", "WRS"))
+        self.assertEqual(_reference_order("id.imo"), ("NSC", "PANS", "WRS"))
+
+        # Voyage fields: NSC -> PANS -> WRS. The current NSC schema has no
+        # voyage columns, so ReferenceDB naturally falls through to PANS/WRS.
+        self.assertEqual(_reference_order("voyage.destination"), ("NSC", "PANS", "WRS"))
+        self.assertEqual(_reference_order("voyage.eta"), ("NSC", "PANS", "WRS"))
+
+        # Physical dimensions: WRS -> PANS -> NSC where applicable.
+        self.assertEqual(_reference_order("vessel.length"), ("WRS", "PANS", "NSC"))
+        self.assertEqual(_reference_order("vessel.beam"), ("WRS", "PANS", "NSC"))
+
+        # Dynamic observations are not reference fallbacks.
+        self.assertEqual(_reference_order("kinematic.speed"), ("NSC", "PANS", "WRS"))
 
     def test_vessel_name_fallback_hierarchy(self):
         # 1. Incoming transmission is primary

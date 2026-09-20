@@ -112,11 +112,11 @@ The Router and Web Console expose the host filesystem inside the containers at:
 
 with the host root mapped from `/`.
 
-The mount is read-only. This is intentional for the folder browser and for reading existing incoming files; it does not grant the application permission to modify arbitrary host directories.
+The Router host-filesystem mount is writable because file-source lifecycle now requires the Router to archive/remove an input file after the Parser has acknowledged it.
 
-A selected absolute host folder is translated to the corresponding path inside the container and can be monitored by the Router when that folder is accessible to the Docker container.
+A selected absolute host folder is translated to the corresponding path inside the container and can be monitored by the Router. For file sources, after a successful Parser ACK, the original input file is moved into a `processed/` subfolder of that source folder. The source remains untouched when delivery to the Parser fails.
 
-For incoming folders that must be writable by Validation itself, use the configured Validation runtime/data-inflow locations or provide an explicit writable bind mount rather than changing the host filesystem mount to writable globally.
+Because the Router has write access to the host filesystem mount, this deployment should be treated as an isolated operational VM. Configure Router source folders only for directories that Validation is intended to read and finalize.
 
 ## Services
 

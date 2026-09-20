@@ -62,6 +62,16 @@ class TrackStateDB:
     );
     """
 
+    CREATE_REFERENCE_SQL = """
+    CREATE TABLE IF NOT EXISTS mmsi_reference (
+        mmsi          INTEGER PRIMARY KEY,
+        values_json   TEXT NOT NULL,
+        last_tx_iso   TEXT,
+        last_source   TEXT,
+        updated_at    TEXT NOT NULL
+    );
+    """
+
     def __init__(self, db_path: Optional[Path] = None):
         target_path = db_path or _find_default_state_db()
         target_path.parent.mkdir(parents=True, exist_ok=True)

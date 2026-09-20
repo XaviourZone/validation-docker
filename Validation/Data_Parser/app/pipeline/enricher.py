@@ -275,6 +275,9 @@ class VesselEnricher:
                 if getattr(rec, attr, None):
                     break
 
+        if ctx.wrs_status_decode:
+            rec.cat_annotation = ctx.wrs_status_decode
+
         # Final fallback: the cumulative last-known reference for this MMSI.
         # Only fields in MMSI_REFERENCE_FIELDS are eligible, so dynamic
         # position/kinematics/timestamps are never copied from an old message.
@@ -290,8 +293,6 @@ class VesselEnricher:
                 setattr(rec, attr, value)
                 history_recovered.append(logical)
 
-        if ctx.wrs_status_decode and not rec.cat_annotation:
-            rec.cat_annotation = ctx.wrs_status_decode
 
         # Remarks are built only from explicit evidence. PANS/NSC CLEARED
         # currently records that the vessel was resolved in that reference DB.

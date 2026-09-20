@@ -194,8 +194,17 @@
         {method: "POST"}
       );
 
-      if (kind === "wrs") renderWrsConfig(data);
-      else renderPansConfig(data);
+      if (kind === "wrs") {
+        // Finalize now starts the WRS refresh server-side. Do not call
+        // /api/database/wrs/refresh again here or we race the refresh and
+        // incorrectly report "already running".
+        if (data.refresh && data.refresh.success === false) {
+          throw new Error(data.refresh.message || "Failed to start WRS refresh");
+        }
+        await loadReferenceConfigs();
+      } else {
+        renderPansConfig(data);
+      }
 
       setFeedback(feedbackId, data.message || "Folder uploaded and configured.", "success");
       selectedFolders[kind] = null;
@@ -295,11 +304,10 @@
       const data = await uploadFolder("wrs");
       if (!data) return;
 
+      // The finalize endpoint starts WRS refresh server-side.
+      // Keep the loading state alive while that background import runs.
+      refreshStarted = Boolean(data.refresh?.success);
       setFeedback("db-wrs-feedback", "WRS database refresh started. Please wait…", "warning");
-      const refresh = await requestJson("/api/database/wrs/refresh", {method: "POST"});
-      refreshStarted = true;
-
-      if (refresh.message) setFeedback("db-wrs-feedback", refresh.message, "warning");
       await waitForWrsRefresh();
 
       setFeedback("db-wrs-feedback", "WRS database updated successfully.", "success");

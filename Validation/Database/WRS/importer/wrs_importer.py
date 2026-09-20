@@ -171,6 +171,16 @@ def process_csv_file(conn, file_path, batch_id, is_decode, batch_size=10000):
             """, (rows_loaded, file_id))
             conn.commit()
 
+            # Build the VESSEL_ID lookup index after the bulk load.
+            # The index is part of the final database contract, but deferring
+            # construction avoids per-row index maintenance during import.
+            if "VESSEL_ID" in cols:
+                conn.execute(
+                    f'CREATE INDEX "idx_{table_name}_vessel_id" '
+                    f'ON "{table_name}"("VESSEL_ID")'
+                )
+            conn.commit()
+
             if encoding_index > 0:
                 log.warning(
                     "Loaded %s using fallback encoding %s after UTF-8 decoding failed.",

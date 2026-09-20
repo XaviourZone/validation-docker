@@ -112,9 +112,9 @@ The Router and Web Console expose the host filesystem inside the containers at:
 
 with the host root mapped from `/`.
 
-The Router host-filesystem mount is writable because file-source lifecycle now requires the Router to archive/remove an input file after the Parser has acknowledged it.
+The Router host-filesystem mount is writable because file-source lifecycle requires the Router to delete an input file after the Parser has acknowledged it.
 
-A selected absolute host folder is translated to the corresponding path inside the container and can be monitored by the Router. For file sources, after a successful Parser ACK, the original input file is moved into a `processed/` subfolder of that source folder. The source remains untouched when delivery to the Parser fails.
+A selected absolute host folder is translated to the corresponding path inside the container and can be monitored by the Router. For file sources, after a successful Parser ACK, the original input file is deleted immediately. No `processed/` copy or archive is retained. If delivery to the Parser fails or retries are exhausted without a successful ACK, the original input file remains available for retry/operator handling.
 
 Because the Router has write access to the host filesystem mount, this deployment should be treated as an isolated operational VM. Configure Router source folders only for directories that Validation is intended to read and finalize.
 

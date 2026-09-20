@@ -240,7 +240,13 @@
     while (Date.now() - started < timeout) {
       try {
         const status = await requestJson("/api/database/status");
-        if (!status.wrs?.is_refreshing) return status.wrs || {};
+        const wrs = status.wrs || {};
+        if (!wrs.is_refreshing) {
+          if (wrs.refresh_result && wrs.refresh_result.success === false) {
+            throw new Error("WRS database refresh failed: " + (wrs.refresh_result.message || "unknown importer error"));
+          }
+          return wrs;
+        }
       } catch (_) {
         // Keep waiting; the next poll can recover from a transient request failure.
       }

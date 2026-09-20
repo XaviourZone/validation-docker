@@ -100,8 +100,99 @@ def ensure_table_and_columns(conn, table_name, record_dict):
                 
     return existing_columns
 
+def _record_value(record, *names):
+    """Return the first non-empty value matching any field name case-insensitively."""
+    by_lower = {str(key).lower(): value for key, value in record.items()}
+    for name in names:
+        value = by_lower.get(str(name).lower())
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return None
+
+
+def _upsert_pans_record(conn, table_name, record):
+    """
+    Upsert one PANS vessel record.
+
+    Identity priority:
+      1. IMONumber
+      2. MMSINumber
+      3. CallSign
+
+    New XML for the same vessel updates the existing row instead of creating
+    another duplicate row. Fields not present in the new XML are preserved.
+    """
+    cur = conn.cursor()
+
+    identity_fields = (
+        ("IMONumber", _record_value(record, "IMONumber")),
+        ("MMSINumber", _record_value(record, "MMSINumber")),
+        ("CallSign", _record_value(record, "CallSign")),
+    )
+
+    existing_row = None
+    matched_field = None
+    matched_value = None
+
+    for field, value in identity_fields:
+        if not value:
+            continue
+        safe_field = str(field).replace("-", "_").replace(" ", "_")
+        cur.execute(
+            f'SELECT _id FROM "{table_name}" '
+            f'WHERE "{safe_field}" = ? ORDER BY _id DESC LIMIT 1',
+            (value,),
+        )
+        row = cur.fetchone()
+        if row:
+            existing_row = row
+            matched_field = field
+            matched_value = value
+            break
+
+    if existing_row:
+        # Update only fields supplied by this XML. This prevents a partial
+        # PANS message from erasing already-known vessel attributes.
+        assignments = []
+        values = []
+        for column, value in record.items():
+            safe_column = str(column).replace("-", "_").replace(" ", "_")
+            if safe_column == "_id":
+                continue
+            if value is None or not str(value).strip():
+                continue
+            assignments.append(f'"{safe_column}" = ?')
+            values.append(str(value))
+
+        if assignments:
+            values.append(existing_row[0])
+            cur.execute(
+                f'UPDATE "{table_name}" SET {", ".join(assignments)} WHERE _id = ?',
+                values,
+            )
+
+        log = logging.getLogger("pans_importer")
+        log.info(
+            f"Updated {table_name} for {matched_field}={matched_value} "
+            f"(row_id={existing_row[0]})"
+        )
+        return "updated"
+
+    cols = list(record.keys())
+    placeholders = ",".join(["?"] * len(cols))
+    col_names = ",".join(f'"{str(col).replace("-", "_").replace(" ", "_")}"' for col in cols)
+    values = [str(record[col]) for col in cols]
+    cur.execute(
+        f'INSERT INTO "{table_name}" ({col_names}) VALUES ({placeholders})',
+        values,
+    )
+    log = logging.getLogger("pans_importer")
+    log.info(f"Inserted new {table_name} record")
+    return "inserted"
+
+
 def process_xml_file(conn, file_path, batch_id):
-    """Parse XML and insert into appropriate PANS table."""
+    """Parse XML and insert/update the appropriate PANS table."""
     log = logging.getLogger("pans_importer")
     
     file_hash = sha256_file(file_path)
@@ -146,16 +237,12 @@ def process_xml_file(conn, file_path, batch_id):
         # Ensure schema
         ensure_table_and_columns(conn, table_name, safe_record)
         
-        # Insert
-        cols = list(safe_record.keys())
-        placeholders = ",".join(["?"] * len(cols))
-        col_names = ",".join(cols)
-        values = list(safe_record.values())
-        
-        cur.execute(f"INSERT INTO {table_name} ({col_names}) VALUES ({placeholders})", values)
-        
+        # Insert or update the vessel record. PANS is a live reference feed:
+        # repeated XML for the same vessel must refresh the existing record.
+        action = _upsert_pans_record(conn, table_name, safe_record)
+
         cur.execute("""
-            UPDATE import_file 
+            UPDATE import_file
             SET loaded_at = datetime('now'), status = 'COMPLETED', rows_loaded = 1
             WHERE file_id = ?
         """, (file_id,))

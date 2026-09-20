@@ -230,20 +230,46 @@ class DatabaseClient:
             self.logger.info("Executing WRS Importer...")
             def run_importer():
                 try:
-                    res = subprocess.run(cmd, cwd=str(self.workspace_root), capture_output=True, text=True)
-                    if res.returncode == 0:
+                    # Stream importer output into the Web Console log while the
+                    # process is running. This avoids hiding progress behind
+                    # subprocess.run(capture_output=True) until completion.
+                    process = subprocess.Popen(
+                        cmd,
+                        cwd=str(self.workspace_root),
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                    )
+                    output_lines = []
+                    if process.stdout is not None:
+                        for line in process.stdout:
+                            line = line.rstrip()
+                            if line:
+                                output_lines.append(line)
+                                # Keep the in-memory failure detail bounded.
+                                if len(output_lines) > 200:
+                                    output_lines.pop(0)
+                                self.logger.info(f"[WRS_IMPORTER] {line}")
+
+                    returncode = process.wait()
+                    detail = "\\n".join(output_lines).strip()
+
+                    if returncode == 0:
                         self.wrs_refresh_result = {
                             "success": True,
                             "message": "WRS import completed successfully"
                         }
                         self.logger.info("WRS Import completed successfully.")
                     else:
-                        detail = (res.stderr or res.stdout or "WRS importer exited with an error").strip()
+                        detail = detail or "WRS importer exited with an error"
                         self.wrs_refresh_result = {
                             "success": False,
                             "message": detail[-2000:]
                         }
-                        self.logger.error(f"WRS Import failed (exit {res.returncode}): {detail}")
+                        self.logger.error(
+                            f"WRS Import failed (exit {returncode}): {detail}"
+                        )
                 except Exception as e:
                     self.wrs_refresh_result = {
                         "success": False,

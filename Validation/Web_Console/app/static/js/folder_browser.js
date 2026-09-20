@@ -10,6 +10,7 @@
   const cancelBtn = document.getElementById("folder-browser-cancel");
   const closeBtn = document.getElementById("folder-browser-close");
   const titleEl = modal ? modal.querySelector(".modal-title") : null;
+  let browseApi = "/api/router/filesystem/browse";
   let currentPath = "";
   let targetInput = null;
 
@@ -24,6 +25,7 @@
     const targetId = button && button.getAttribute("data-folder-browser-target");
     targetInput = targetId ? document.getElementById(targetId) : document.getElementById("src-folder");
     if (!targetInput) return;
+    browseApi = (button && button.getAttribute("data-folder-browser-api")) || "/api/router/filesystem/browse";
     const customTitle = button && button.getAttribute("data-folder-browser-title");
     if (titleEl) titleEl.textContent = customTitle || "Select Input Folder";
     modal.classList.add("open");
@@ -42,7 +44,7 @@
   async function loadDirectory(path) {
     showError("");
     try {
-      const url = path ? "/api/router/filesystem/browse?path=" + encodeURIComponent(path) : "/api/router/filesystem/browse";
+      const url = path ? browseApi + "?path=" + encodeURIComponent(path) : browseApi;
       const response = await fetch(url);
       const data = await response.json();
       if (!response.ok || data.error) throw new Error(data.error || "Unable to browse directory");

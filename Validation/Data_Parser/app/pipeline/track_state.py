@@ -129,37 +129,36 @@ class TrackStateDB:
 
             # Merge non-empty current values into the unique MMSI reference.
             # Existing values are retained when the current transaction is blank.
-            if reference_values:
+            if reference_values is not None:
                 clean = {
                     key: value for key, value in reference_values.items()
                     if key in MMSI_REFERENCE_FIELDS and value not in (None, "")
                 }
-                if clean:
-                    row = self._conn.execute(
-                        "SELECT values_json FROM mmsi_reference WHERE mmsi=? LIMIT 1",
-                        (mmsi,),
-                    ).fetchone()
-                    merged = {}
-                    if row and row["values_json"]:
-                        try:
-                            merged = json.loads(row["values_json"]) or {}
-                        except (TypeError, ValueError):
-                            log.warning("Invalid MMSI reference JSON for MMSI=%s; rebuilding", mmsi)
-                    merged.update(clean)
-                    self._conn.execute(
-                        """
-                        INSERT INTO mmsi_reference
-                            (mmsi, values_json, last_tx_iso, last_source, updated_at)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(mmsi) DO UPDATE SET
-                            values_json = excluded.values_json,
-                            last_tx_iso = excluded.last_tx_iso,
-                            last_source = excluded.last_source,
-                            updated_at  = excluded.updated_at
-                        """,
-                        (mmsi, json.dumps(merged, ensure_ascii=False, default=str),
-                         str(tx_timestamp_iso or now_iso), source, now_iso),
-                    )
+                row = self._conn.execute(
+                    "SELECT values_json FROM mmsi_reference WHERE mmsi=? LIMIT 1",
+                    (mmsi,),
+                ).fetchone()
+                merged = {}
+                if row and row["values_json"]:
+                    try:
+                        merged = json.loads(row["values_json"]) or {}
+                    except (TypeError, ValueError):
+                        log.warning("Invalid MMSI reference JSON for MMSI=%s; rebuilding", mmsi)
+                merged.update(clean)
+                self._conn.execute(
+                    """
+                    INSERT INTO mmsi_reference
+                        (mmsi, values_json, last_tx_iso, last_source, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(mmsi) DO UPDATE SET
+                        values_json = excluded.values_json,
+                        last_tx_iso = excluded.last_tx_iso,
+                        last_source = excluded.last_source,
+                        updated_at  = excluded.updated_at
+                    """,
+                    (mmsi, json.dumps(merged, ensure_ascii=False, default=str),
+                     str(tx_timestamp_iso or now_iso), source, now_iso),
+                )
             self._conn.commit()
 
         # Determine active flag from the (possibly just-written) epoch

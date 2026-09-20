@@ -159,6 +159,9 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
         if path == "/api/database/folder/upload":
             self._database_upload_folder_file()
             return
+        if path == "/api/database/folder/upload-batch":
+            self._database_upload_folder_batch()
+            return
         if path == "/api/database/folder/finalize":
             self._database_finalize_folder_upload()
             return
@@ -400,7 +403,80 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
 
             self._json_response({"success": True, "path": str(relative), "bytes": len(data)})
         except Exception as exc:
+            self.database_admin_logger.error(
+                "Folder upload failed: %s", exc, exc_info=True
+            )
             self._json_response({"success": False, "error": str(exc)}, status=HTTPStatus.UNPROCESSABLE_ENTITY)
+
+    def _write_uploaded_folder_part(self, root, relative_name, part):
+        if not part or not part.get("filename"):
+            raise ValueError("Folder upload file is missing")
+        data = part.get("data") or b""
+        if not data:
+            raise ValueError("Uploaded file is empty")
+
+        relative = self._safe_relative_upload_path(relative_name or part["filename"])
+        target = (root / relative).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError:
+            raise ValueError("Uploaded path escapes the import folder")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        return relative, len(data)
+
+    def _database_upload_folder_batch(self):
+        try:
+            query = parse_qs(urlparse(self.path).query)
+            kind = (query.get("kind") or [""])[0].strip().lower()
+            session = (query.get("session") or [""])[0].strip()
+            root = self._folder_upload_root(kind, session)
+            parts = _read_multipart(self)
+
+            uploaded = []
+            total_bytes = 0
+            index = 0
+            while True:
+                file_key = f"file_{index}"
+                relative_key = f"relative_path_{index}"
+                if file_key not in parts:
+                    break
+
+                part = parts[file_key]
+                path_part = parts.get(relative_key)
+                relative_name = (
+                    (path_part.get("data") or b"").decode("utf-8", errors="strict")
+                    if path_part and path_part.get("data") is not None
+                    else part.get("filename")
+                )
+                relative, size = self._write_uploaded_folder_part(
+                    root, relative_name, part
+                )
+                uploaded.append(str(relative))
+                total_bytes += size
+                index += 1
+
+            if not uploaded:
+                raise ValueError("Folder upload batch is empty")
+
+            self.database_admin_logger.info(
+                "Folder upload batch received: kind=%s session=%s files=%s bytes=%s",
+                kind, session, len(uploaded), total_bytes
+            )
+            self._json_response({
+                "success": True,
+                "files": len(uploaded),
+                "bytes": total_bytes,
+                "paths": uploaded,
+            })
+        except Exception as exc:
+            self.database_admin_logger.error(
+                "Folder upload batch failed: %s", exc, exc_info=True
+            )
+            self._json_response(
+                {"success": False, "error": str(exc)},
+                status=HTTPStatus.UNPROCESSABLE_ENTITY,
+            )
 
     def _database_finalize_folder_upload(self):
         try:

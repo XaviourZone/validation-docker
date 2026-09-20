@@ -140,7 +140,7 @@
   }
 
   function setupRouterDashboardActions() {
-    const addButtons = ["btn-router-add-source", "btn-add-source"];
+    const addButtons = ["btn-router-add-source"];
     addButtons.forEach((id) => {
       const el = document.getElementById(id);
       if (el && !el.dataset.bound) {

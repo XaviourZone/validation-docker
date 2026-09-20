@@ -579,11 +579,25 @@ def install_database_admin_extension(handler_class, workspace_root, service_cont
                     raise ValueError("PANS folder must contain XML files")
 
             self._save_config_entry(kind, str(path))
+
+            # WRS is a batch reference database. Once the operator finishes
+            # uploading/configuring a WRS folder, immediately start a refresh
+            # so the active runtime/reference/wrs.db is rebuilt and the Web
+            # Console reflects the new record count without a second manual
+            # action. PANS continues to be handled by its polling importer.
+            refresh = None
+            if kind == "wrs":
+                database_client = getattr(self, "database_client", None)
+                if database_client is None:
+                    raise RuntimeError("Database client is not available for WRS refresh")
+                refresh = database_client.refresh_wrs()
+
             self._json_response({
                 "success": True,
                 "kind": kind,
                 "input_dir": str(path),
                 "children": children,
+                "refresh": refresh,
                 "message": f"{kind.upper()} folder uploaded and configured",
             })
         except Exception as exc:

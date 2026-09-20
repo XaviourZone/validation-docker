@@ -134,10 +134,15 @@ def _upsert_pans_record(conn, table_name, record):
     matched_field = None
     matched_value = None
 
+    cur.execute(f'PRAGMA table_info("{table_name}")')
+    available_columns = {str(row[1]).lower() for row in cur.fetchall()}
+
     for field, value in identity_fields:
         if not value:
             continue
         safe_field = str(field).replace("-", "_").replace(" ", "_")
+        if safe_field.lower() not in available_columns:
+            continue
         cur.execute(
             f'SELECT _id FROM "{table_name}" '
             f'WHERE "{safe_field}" = ? ORDER BY _id DESC LIMIT 1',

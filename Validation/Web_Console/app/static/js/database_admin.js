@@ -94,10 +94,10 @@
     picker.click();
   }
 
-  async function uploadFolder(kind) {
+  async function uploadFolder(kind, options = {}) {
     const files = selectedFolders[kind];
     const feedbackId = kind === "wrs" ? "db-wrs-feedback" : "db-pans-feedback";
-    const buttonId = kind === "wrs" ? "btn-wrs-save-folder" : "btn-pans-save-folder";
+    const buttonId = kind === "wrs" ? "btn-wrs-update" : "btn-pans-save-folder";
 
     if (!files || !files.length) {
       setFeedback(feedbackId, "Select a folder from this computer first.", "error");
@@ -113,6 +113,7 @@
     let totalBytes = 0;
 
     setBusy(buttonId, true, "Uploading…");
+    if (options.showLoading && window.consoleApp?.showLoading) window.consoleApp.showLoading(kind === "wrs" ? "Updating WRS" : "Updating PANS", kind === "wrs" ? "Uploading the selected folder and rebuilding WRS reference data…" : "Uploading the selected XML folder and configuring the live PANS feed…");
 
     try {
       for (const file of files) {
@@ -160,6 +161,7 @@
       return null;
     } finally {
       setBusy(buttonId, false);
+      if (options.showLoading && window.consoleApp?.hideLoading) window.consoleApp.hideLoading();
     }
   }
 
@@ -176,18 +178,27 @@
   }
 
   async function updateWrs() {
-    const data = await uploadFolder("wrs");
-    if (!data) return;
-
+    const button = byId("btn-wrs-update");
+    if (button?.disabled) return;
+    if (!selectedFolders.wrs?.length) {
+      setFeedback("db-wrs-feedback", "Select a WRS folder from this computer first.", "error");
+      return;
+    }
+    if (window.consoleApp?.showLoading) window.consoleApp.showLoading("Updating WRS", "Uploading the selected folder and rebuilding the WRS database…");
     setBusy("btn-wrs-update", true, "Updating…");
     try {
+      const data = await uploadFolder("wrs");
+      if (!data) return;
+      setFeedback("db-wrs-feedback", "WRS database refresh started. Please wait…", "warning");
       const refresh = await requestJson("/api/database/wrs/refresh", {method: "POST"});
       setFeedback("db-wrs-feedback", refresh.message || "WRS update started.", "success");
       if (window.consoleApp?.refresh) window.consoleApp.refresh();
     } catch (error) {
-      setFeedback("db-wrs-feedback", error.message, "error");
+      const msg = error.message || "";
+      setFeedback("db-wrs-feedback", msg.toLowerCase().includes("already running") ? "WRS refresh is already running. Please wait for it to finish." : msg, msg.toLowerCase().includes("already running") ? "warning" : "error");
     } finally {
       setBusy("btn-wrs-update", false);
+      if (window.consoleApp?.hideLoading) window.consoleApp.hideLoading();
     }
   }
 
@@ -343,7 +354,6 @@
       setSelectedFolder("pans", this);
     });
 
-    byId("btn-wrs-save-folder")?.addEventListener("click", () => uploadFolder("wrs"));
     byId("btn-wrs-update")?.addEventListener("click", updateWrs);
     byId("btn-pans-save-folder")?.addEventListener("click", () => uploadFolder("pans"));
 

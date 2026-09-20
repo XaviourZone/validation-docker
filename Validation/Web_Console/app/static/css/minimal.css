@@ -739,3 +739,238 @@ html, body { min-height: 100%; }
 @media (max-width: 700px) {
   .content-footer { padding-left: 16px; padding-right: 16px; }
 }
+
+
+/* ==========================================================================
+   VALIDATION CONSOLE — FINAL GLOBAL THEME
+   All views intentionally share one visual system. Data Router keeps its
+   functional layout only; its visual treatment is normalized to the console.
+   ========================================================================== */
+:root{
+  --global-bg:#080b10;
+  --global-surface:#11161f;
+  --global-surface-2:#161c26;
+  --global-border:rgba(255,255,255,.085);
+  --global-border-soft:rgba(255,255,255,.055);
+  --global-text:#f3f6fa;
+  --global-muted:#8b96a6;
+  --global-accent:#5aaeff;
+  --global-radius:14px;
+  --global-shadow:0 14px 42px rgba(0,0,0,.20);
+}
+html,body{
+  background:var(--global-bg)!important;
+  color:var(--global-text)!important;
+}
+body{
+  background:
+    radial-gradient(circle at 85% 0%,rgba(10,132,255,.06),transparent 28%),
+    var(--global-bg)!important;
+}
+.content-wrapper{background:transparent!important}
+.content-body{
+  width:100%!important;
+  max-width:none!important;
+  padding:24px 28px!important;
+}
+.view-tab{
+  width:100%!important;
+  max-width:1500px!important;
+  margin:0 auto!important;
+  padding-bottom:22px!important;
+}
+
+/* Shared containers */
+.view-tab > .panel,
+.view-tab > .kpi-grid,
+.view-tab > .database-admin-grid,
+.view-tab > .database-inventory-panel{
+  margin-bottom:16px!important;
+}
+.panel,
+.kpi-card,
+.module-card,
+.control-group-card,
+.database-source-card,
+.database-inventory-panel,
+.router-hero-card,
+.router-kpi-card,
+.router-side-card{
+  background:linear-gradient(145deg,rgba(24,30,40,.92),rgba(14,18,25,.92))!important;
+  border:1px solid var(--global-border)!important;
+  border-radius:var(--global-radius)!important;
+  box-shadow:var(--global-shadow),inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+.panel-header,
+.database-source-header{
+  background:rgba(255,255,255,.018)!important;
+  border-bottom:1px solid var(--global-border-soft)!important;
+}
+.panel-header{
+  min-height:50px!important;
+  padding:0 17px!important;
+}
+.panel-title{font-size:13px!important;font-weight:700!important}
+.panel-body{padding:17px!important}
+
+/* Shared KPI treatment */
+.kpi-grid{gap:12px!important;margin-bottom:16px!important}
+.kpi-card{
+  min-height:96px!important;
+  padding:16px!important;
+}
+.kpi-card::after{background:rgba(255,255,255,.06)!important}
+.kpi-title{
+  color:var(--global-muted)!important;
+  font-size:10px!important;
+  letter-spacing:.08em!important;
+}
+.kpi-value{
+  color:var(--global-text)!important;
+  font-size:24px!important;
+  font-weight:700!important;
+}
+.module-grid{gap:12px!important}
+.module-card{padding:17px!important}
+
+/* Shared table treatment */
+.data-table{border-collapse:separate!important;border-spacing:0!important}
+.data-table th{
+  background:rgba(255,255,255,.022)!important;
+  color:#8d98a8!important;
+  border-bottom:1px solid var(--global-border)!important;
+  padding:10px 12px!important;
+  font-size:10px!important;
+  letter-spacing:.07em!important;
+}
+.data-table td{
+  color:#dce2ea!important;
+  border-bottom:1px solid rgba(255,255,255,.045)!important;
+  padding:11px 12px!important;
+}
+.data-table tr:hover td{
+  background:rgba(255,255,255,.025)!important;
+  color:#fff!important;
+}
+
+/* Shared controls */
+.btn{
+  border-radius:9px!important;
+  min-height:34px;
+}
+.form-input,.form-select{
+  border-radius:9px!important;
+  background:rgba(5,9,15,.50)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+}
+.form-input:focus,.form-select:focus{
+  border-color:rgba(90,174,255,.48)!important;
+  box-shadow:0 0 0 3px rgba(90,174,255,.08)!important;
+}
+
+/* --------------------------------------------------------------------------
+   Data Router normalization
+   -------------------------------------------------------------------------- */
+#view-router{max-width:1500px!important;padding-bottom:22px!important}
+#view-router .router-hero-card{
+  min-height:0!important;
+  margin-bottom:16px!important;
+  padding:18px 20px!important;
+  border-radius:var(--global-radius)!important;
+  background:linear-gradient(145deg,rgba(24,30,40,.92),rgba(14,18,25,.92))!important;
+  box-shadow:var(--global-shadow),inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+#view-router .router-hero-card:after{display:none!important}
+#view-router .router-eyebrow{
+  color:var(--global-muted)!important;
+  font-size:10px!important;
+}
+#view-router .router-hero-copy h2{
+  font-size:20px!important;
+  letter-spacing:-.025em!important;
+}
+#view-router .router-hero-copy p{
+  color:var(--global-muted)!important;
+  margin-top:5px!important;
+}
+#view-router .router-kpi-grid{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:12px!important;
+  margin-bottom:16px!important;
+}
+#view-router .router-kpi-card{
+  min-height:96px!important;
+  padding:16px!important;
+  border-radius:var(--global-radius)!important;
+  background:linear-gradient(145deg,rgba(24,30,40,.92),rgba(14,18,25,.92))!important;
+  box-shadow:var(--global-shadow),inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+#view-router .router-kpi-icon{
+  width:38px!important;height:38px!important;flex-basis:38px!important;
+  border-radius:10px!important;
+}
+#view-router .router-main-grid{
+  grid-template-columns:minmax(0,1fr) 280px!important;
+  gap:16px!important;
+}
+#view-router .router-sources-panel{
+  margin-bottom:0!important;
+}
+#view-router .router-sources-header{
+  min-height:54px!important;
+  padding:0 17px!important;
+}
+#view-router .router-section-title{
+  font-size:13px!important;
+  font-weight:700!important;
+}
+#view-router .router-section-subtitle{
+  color:var(--global-muted)!important;
+}
+#view-router .router-side-stack{gap:16px!important}
+#view-router .router-side-card{
+  padding:16px!important;
+  border-radius:var(--global-radius)!important;
+}
+#view-router .router-side-title{font-size:13px!important}
+#view-router .router-status-big{font-size:20px!important}
+#view-router .router-action-row:hover{background:rgba(255,255,255,.035)!important}
+#view-router .sources-table tbody td{height:44px!important}
+
+/* Reference Data uses the same card language */
+#view-database .database-source-card,
+#view-database .database-inventory-panel{
+  border-radius:var(--global-radius)!important;
+}
+#view-database .database-source-header{padding:15px 17px!important}
+#view-database .database-source-body{padding:16px 17px!important}
+
+/* System and Logs should occupy the same comfortable console width */
+#view-system .panel,
+#view-logs .panel{min-height:220px!important}
+
+/* Common footer */
+.content-footer{
+  flex:0 0 auto!important;
+  width:100%!important;
+  padding:10px 28px 14px!important;
+  text-align:center!important;
+  color:#697585!important;
+  font-size:10px!important;
+  border-top:1px solid rgba(255,255,255,.06)!important;
+  background:rgba(5,8,12,.25)!important;
+}
+
+@media(max-width:1120px){
+  #view-router .router-main-grid{grid-template-columns:1fr!important}
+  #view-router .router-side-stack{display:grid;grid-template-columns:1fr 1fr}
+}
+@media(max-width:850px){
+  #view-router .router-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #view-router .router-hero-card{align-items:flex-start;flex-direction:column}
+}
+@media(max-width:620px){
+  .content-body{padding:18px 14px!important}
+  #view-router .router-kpi-grid{grid-template-columns:1fr!important}
+  #view-router .router-side-stack{grid-template-columns:1fr}
+}

@@ -97,10 +97,9 @@ def create_table_from_headers(conn, table_name, headers):
     conn.execute(f'DROP TABLE IF EXISTS "{table_name}"')
     conn.execute(f'CREATE TABLE "{table_name}" ({cols_def})')
     
-    # Create index on VESSEL_ID if it exists
-    if "VESSEL_ID" in cols:
-        conn.execute(f'CREATE INDEX "idx_{table_name}_vessel_id" ON "{table_name}"("VESSEL_ID")')
-    
+    # The VESSEL_ID lookup index is created after the bulk load in
+    # process_csv_file(). Deferring it avoids per-row index maintenance
+    # during large WRS imports.
     return cols
 
 def process_csv_file(conn, file_path, batch_id, is_decode, batch_size=10000):

@@ -231,6 +231,7 @@ def db_counts(paths: dict[str, Path]) -> dict:
 def run_source(processor: PipelineProcessor, source: str, paths: list[Path], output_dir: Path) -> dict:
     stats = Counter()
     provenance = {field: Counter() for field in CANONICAL_FIELDS}
+    history_recovered_fields = 0
     started = time.monotonic()
     xml_files_before = len(list(output_dir.glob("*.xml")))
 
@@ -264,6 +265,7 @@ def run_source(processor: PipelineProcessor, source: str, paths: list[Path], out
                 stats["other_error_count"] += 1
         stats["failed_envelopes"] += int(not result.success)
         for record in result.records:
+            history_recovered_fields += len(record.raw_attributes.get("mmsi_history_recovered") or [])
             for field, source_name in (record.raw_attributes.get("enrichment_provenance") or {}).items():
                 if field in provenance:
                     provenance[field][source_name] += 1
@@ -279,6 +281,7 @@ def run_source(processor: PipelineProcessor, source: str, paths: list[Path], out
         stats["records_parsed"] / stats["elapsed_seconds"], 2
     ) if stats["elapsed_seconds"] else 0
     stats["provenance"] = {field: dict(counts) for field, counts in provenance.items()}
+    stats["mmsi_history_recovered_fields"] = history_recovered_fields
     return dict(stats)
 
 
@@ -426,17 +429,24 @@ def main() -> int:
             "",
             "## Enrichment provenance",
             "",
-            "| XML field | Incoming | WRS | PANS | NSC | Derived | None |",
-            "|---|---:|---:|---:|---:|---:|---:|",
+            "| XML field | Incoming | WRS | PANS | NSC | MMSI history | Derived | None |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|",
         ]
         for field in CANONICAL_FIELDS:
             counts = report["provenance"].get(field, {})
             lines.append(
                 f"| {field} | {counts.get('INCOMING', 0)} | {counts.get('WRS', 0)} | "
                 f"{counts.get('PANS', 0)} | {counts.get('NSC', 0)} | "
-                f"{counts.get('DERIVED', 0)} | {counts.get('NONE', 0)} |"
+                f"{counts.get('MMSI_HISTORY', 0)} | {counts.get('DERIVED', 0)} | "
+                f"{counts.get('NONE', 0)} |"
             )
         lines += [
+            "",
+            "## MMSI history fallback",
+            "",
+            f"- Recovered field values from prior MMSI transactions: **{sum(v.get('mmsi_history_recovered_fields', 0) for v in source_results.values())}**",
+            "",
+            "The persistent reference store keeps one cumulative last-known record per MMSI and never overwrites a known value with a blank value.",
             "",
             "## Reference DBs",
             "",

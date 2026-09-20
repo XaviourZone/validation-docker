@@ -93,6 +93,7 @@
     setupClock();
     setupControls();
     setupModalListeners();
+    setupRouterDashboardActions();
     fetchParserDestinations();
     showAppLoading("Starting Validation", "Connecting to local services…");
     fetchDashboardData().finally(() => { state.initialLoadComplete = true; hideAppLoading(); });
@@ -136,6 +137,24 @@
         delete button.dataset.originalText;
       }
     }
+  }
+
+  function setupRouterDashboardActions() {
+    const addButtons = ["btn-router-add-source", "btn-add-source"];
+    addButtons.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && !el.dataset.bound) {
+        el.dataset.bound = "1";
+        el.addEventListener("click", openAddSourceModal);
+      }
+    });
+    ["btn-router-refresh", "btn-router-refresh-2"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el && !el.dataset.bound) {
+        el.dataset.bound = "1";
+        el.addEventListener("click", fetchDashboardData);
+      }
+    });
   }
 
   // Navigation Setup
@@ -431,6 +450,17 @@
     if (dom.routerFailCount) {
       dom.routerFailCount.textContent = totals.failed || 0;
     }
+
+    const sideStatus = document.getElementById("router-side-status-text");
+    const sideQueue = document.getElementById("router-side-queue");
+    const sideRate = document.getElementById("router-side-rate");
+    const sideAck = document.getElementById("router-side-ack");
+    const sideFail = document.getElementById("router-side-fail");
+    if (sideStatus) sideStatus.textContent = serviceStatus === "RUNNING" ? "Router Online" : serviceStatus;
+    if (sideQueue) sideQueue.textContent = qHealth.current_depth || 0;
+    if (sideRate) sideRate.textContent = totals.throughput_msg_per_sec || 0.0;
+    if (sideAck) sideAck.textContent = totals.acknowledged || 0;
+    if (sideFail) sideFail.textContent = totals.failed || 0;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -167,156 +167,126 @@ def _db_candidates(path: Path, query: str):
 
 
 def discover_reference_anchor():
-    """Find real identities with useful reference coverage.
+    """Find one real identity with the broadest useful reference coverage.
 
-    Prefer candidates by MMSI/IMO that are present in multiple active
-    reference databases and that carry the intelligence fields used in
-    VesselEnricher.vessel_remarks. A small deterministic scan keeps generation
-    practical while ensuring the generated scenarios exercise real data.
+    Important: reference joins are performed by ReferenceDB, not by assuming
+    that a row appearing in one DB must have the same identity in another DB.
+    This function therefore builds candidates from the union of WRS/PANS/NSC
+    identities, then resolves each candidate using the real lookup logic.
     """
     def clean(value):
-        if value in (None, ""):
+        if value in (None, "", "-", "N/A", "NONE", "None"):
             return None
         return str(value).strip()
 
-    candidates_by_key = {}
-
-    def add_candidates(rows, source):
-        for row in rows:
-            mmsi = clean(row.get("mmsi"))
-            imo = clean(row.get("imo"))
-            callsign = clean(row.get("callsign"))
-            name = clean(row.get("vessel_name"))
-            key = (mmsi, imo)
-            if not mmsi and not imo:
-                continue
-            item = candidates_by_key.setdefault(
-                key,
-                {"mmsi": mmsi, "imo": imo, "callsign": callsign, "vessel_name": name, "sources": set()},
-            )
-            item["sources"].add(source)
-            item["callsign"] = item["callsign"] or callsign
-            item["vessel_name"] = item["vessel_name"] or name
-
-    add_candidates(
-        _db_candidates(
+    # Keep each DB's identities separate first. For each source row, resolve
+    # using its own strongest available identifiers. This avoids losing a
+    # PANS/NSC candidate merely because its MMSI/IMO differs from a WRS row.
+    source_rows = {
+        "WRS": _db_candidates(
             _reference_path("WRS"),
             "SELECT MMSI AS mmsi, IMO AS imo, VESSEL_NAME AS vessel_name, "
             "CALL_SIGN AS callsign FROM wrs_datasets_vessels "
             "WHERE (MMSI IS NOT NULL AND MMSI <> '') OR (IMO IS NOT NULL AND IMO <> '') "
-            "ORDER BY VESSEL_ID LIMIT 1000",
+            "ORDER BY VESSEL_ID LIMIT 1500",
         ),
-        "WRS",
-    )
-    add_candidates(
-        _db_candidates(
+        "PANS": _db_candidates(
             _reference_path("PANS"),
             "SELECT MMSINumber AS mmsi, IMONumber AS imo, VesselName AS vessel_name, "
             "CallSign AS callsign FROM pans_vespro "
             "WHERE (MMSINumber IS NOT NULL AND MMSINumber <> '') OR "
             "(IMONumber IS NOT NULL AND IMONumber <> '') "
-            "ORDER BY _id LIMIT 1000",
+            "ORDER BY _id LIMIT 1500",
         ),
-        "PANS",
-    )
-    add_candidates(
-        _db_candidates(
+        "NSC": _db_candidates(
             _reference_path("NSC"),
             "SELECT ID_MMSI AS mmsi, ID_IMO AS imo, VESSEL_NAME AS vessel_name, "
             "ID_CALLSIGN AS callsign FROM nsc_vessels "
             "WHERE (ID_MMSI IS NOT NULL AND ID_MMSI <> '') OR "
             "(ID_IMO IS NOT NULL AND ID_IMO <> '') "
-            "ORDER BY _id LIMIT 1000",
+            "ORDER BY _id LIMIT 1500",
         ),
-        "NSC",
-    )
+    }
 
     ref_db = ReferenceDB(
         wrs_path=_reference_path("WRS"),
         pans_path=_reference_path("PANS"),
         nsc_path=_reference_path("NSC"),
     )
+
+    def to_int(value):
+        try:
+            return int(float(value)) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+
     best = None
     best_score = -1
+    best_sort = None
     try:
-        for candidate in candidates_by_key.values():
-            try:
-                mmsi = int(float(candidate["mmsi"])) if candidate["mmsi"] else None
-            except (TypeError, ValueError):
-                mmsi = None
-            try:
-                imo = int(float(candidate["imo"])) if candidate["imo"] else None
-            except (TypeError, ValueError):
-                imo = None
-
-            ctx = ref_db.resolve(
-                mmsi=mmsi,
-                imo=imo,
-                callsign=candidate["callsign"],
-                vessel_name=candidate["vessel_name"],
-            )
-            matched = {
-                "WRS": ctx.wrs_matched,
-                "PANS": ctx.pans_matched,
-                "NSC": ctx.nsc_matched,
-            }
-            matched_count = sum(matched.values())
-            if matched_count == 0:
-                continue
-
-            # Strong preference for a vessel resolved by all three sources.
-            score = matched_count * 100
-
-            # Require actual field coverage for the remarks section before
-            # awarding the intelligence bonuses.
-            if ctx.wrs_vigilance_score is not None:
-                score += 20
-            if ctx.wrs_ais_spoofing_detail:
-                score += 15
-            if ctx.wrs_ais_gap_detail:
-                score += 15
-            if ctx.wrs_sanctions_detail:
-                score += 15
-            if ctx.pans_vcn or ctx.pans_berman_dest or ctx.pans_npc:
-                score += 15
-            if ctx.pans_cargo_description or ctx.pans_cargo_tonnage is not None or ctx.pans_hazardous:
-                score += 15
-            if ctx.nsc_region or ctx.nsc_begin_date or ctx.nsc_end_date:
-                score += 10
-
-            # Prefer candidates discovered from multiple source DBs, then
-            # deterministic identity ordering.
-            score += min(len(candidate["sources"]), 3)
-            identity_sort = (
-                candidate["mmsi"] or "",
-                candidate["imo"] or "",
-                (candidate["vessel_name"] or "").upper(),
-            )
-            if score > best_score:
-                best_score = score
-                best = {
-                    "mmsi": mmsi,
-                    "imo": imo,
-                    "callsign": candidate["callsign"],
-                    "vessel_name": candidate["vessel_name"],
-                    "matched_sources": matched,
-                    "score": score,
+        for origin, rows in source_rows.items():
+            for row in rows:
+                candidate = {
+                    "mmsi": to_int(clean(row.get("mmsi"))),
+                    "imo": to_int(clean(row.get("imo"))),
+                    "callsign": clean(row.get("callsign")),
+                    "vessel_name": clean(row.get("vessel_name")),
                 }
-            elif score == best_score and best is not None:
-                best_sort = (
-                    str(best["mmsi"] or ""),
-                    str(best["imo"] or ""),
-                    str(best["vessel_name"] or "").upper(),
+                if candidate["mmsi"] is None and candidate["imo"] is None and not candidate["callsign"] and not candidate["vessel_name"]:
+                    continue
+
+                # Prevent placeholder callsigns/names such as '-' from creating
+                # false/ambiguous lookup attempts.
+                ctx = ref_db.resolve(
+                    mmsi=candidate["mmsi"],
+                    imo=candidate["imo"],
+                    callsign=candidate["callsign"],
+                    vessel_name=candidate["vessel_name"],
                 )
-                if identity_sort < best_sort:
+
+                matched = {
+                    "WRS": ctx.wrs_matched,
+                    "PANS": ctx.pans_matched,
+                    "NSC": ctx.nsc_matched,
+                }
+                matched_count = sum(matched.values())
+                if matched_count == 0:
+                    continue
+
+                score = matched_count * 100
+
+                # Reward actual content used by the selected remarks, not just
+                # a source-level match.
+                score += 20 if ctx.wrs_vigilance_score is not None else 0
+                score += 15 if ctx.wrs_ais_spoofing_detail else 0
+                score += 15 if ctx.wrs_ais_gap_detail else 0
+                score += 15 if ctx.wrs_sanctions_detail else 0
+                score += 15 if (ctx.pans_vcn or ctx.pans_berman_dest or ctx.pans_npc or ctx.pans_eta or ctx.pans_berman_eta) else 0
+                score += 15 if (ctx.pans_cargo_description or ctx.pans_cargo_tonnage is not None or ctx.pans_hazardous) else 0
+                score += 10 if (ctx.nsc_region or ctx.nsc_begin_date or ctx.nsc_end_date) else 0
+
+                # Slight preference for starting from a row in a source other
+                # than WRS when the resulting reference coverage is identical;
+                # this increases the chance of exercising PANS/NSC joins.
+                score += {"WRS": 0, "PANS": 2, "NSC": 2}[origin]
+
+                sort_key = (
+                    -matched_count,
+                    -score,
+                    origin,
+                    str(candidate["imo"] or ""),
+                    str(candidate["mmsi"] or ""),
+                    (candidate["vessel_name"] or "").upper(),
+                )
+                if best is None or sort_key < best_sort:
                     best = {
-                        "mmsi": mmsi,
-                        "imo": imo,
-                        "callsign": candidate["callsign"],
-                        "vessel_name": candidate["vessel_name"],
+                        **candidate,
+                        "origin": origin,
                         "matched_sources": matched,
                         "score": score,
                     }
+                    best_score = score
+                    best_sort = sort_key
     finally:
         ref_db.close()
 
@@ -325,7 +295,8 @@ def discover_reference_anchor():
             "REFERENCE ANCHOR: "
             f"MMSI={best['mmsi']} IMO={best['imo']} "
             f"CALLSIGN={best['callsign']} NAME={best['vessel_name']} "
-            f"SOURCES={best['matched_sources']} SCORE={best['score']}"
+            f"ORIGIN={best['origin']} SOURCES={best['matched_sources']} "
+            f"SCORE={best['score']}"
         )
     else:
         print("REFERENCE ANCHOR: none found; retained assumption-only scenarios")

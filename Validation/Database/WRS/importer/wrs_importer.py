@@ -12,6 +12,9 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+# WRS CSVs can contain large text fields. Raise Python's csv parser field-size limit.
+csv.field_size_limit(max(sys.maxsize, 1024 * 1024 * 1024))
+
 # Add project root to path for imports if run directly
 import sys
 project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
@@ -120,7 +123,7 @@ def process_csv_file(conn, file_path, batch_id, is_decode, batch_size=10000):
 
     rows_loaded = 0
     try:
-        with open(file_path, "r", encoding="utf-8-sig") as f:
+        with open(file_path, "r", encoding="utf-8-sig", newline="") as f:
             reader = csv.reader(f)
             try:
                 headers = next(reader)
@@ -311,7 +314,9 @@ def main():
     setup_logger("wrs_importer", log_dir=log_dir, level=log_level)
     
     try:
-        run_import(config, dry_run=args.dry_run)
+        success = run_import(config, dry_run=args.dry_run)
+        if not success:
+            sys.exit(1)
     except KeyboardInterrupt:
         logging.getLogger("wrs_importer").info("Import cancelled by user.")
         sys.exit(130)

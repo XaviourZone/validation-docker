@@ -61,7 +61,7 @@ def parse_raw_dict(raw: Dict[str, Any]) -> RouterConfig:
                 stability_window_seconds=float(src_dict.get("stability_window_seconds", 1.0)),
                 file_patterns=src_dict.get("file_patterns", ["*.csv", "*.txt", "*"]),
                 preserve_file=bool(src_dict.get("preserve_file", False)),
-                processed_folder=str(src_dict.get("processed_folder", "processed")),
+                processed_folder=str(src_dict.get("processed_folder", "")),
             )
         elif stype == SourceType.TCP.value:
             framing_val = src_dict.get("framing", "line").lower()

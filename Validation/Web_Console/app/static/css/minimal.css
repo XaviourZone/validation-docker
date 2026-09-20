@@ -974,3 +974,11 @@ body{
   #view-router .router-kpi-grid{grid-template-columns:1fr!important}
   #view-router .router-side-stack{grid-template-columns:1fr}
 }
+
+/* Router cleanup: sidebar status and quick actions are intentionally removed. */
+#view-router .router-main-grid{
+  grid-template-columns:minmax(0,1fr)!important;
+}
+#view-router .router-side-stack{
+  display:none!important;
+}

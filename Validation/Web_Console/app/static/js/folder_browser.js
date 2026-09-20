@@ -52,10 +52,7 @@
       if (!response.ok || data.error) throw new Error(data.error || "Unable to browse directory");
 
       if (data.roots) {
-        currentPath = "";
-        if (current) current.textContent = "Select a permitted root";
-        if (parentBtn) parentBtn.disabled = true;
-        renderEntries(data.roots);
+        loadDirectory("/");
         return;
       }
 

@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUNDLE_DIR="${1:-${REPO_DIR}/../validation-offline-ubuntu1804}"
 IMAGE="validation/parser:dev"
-DOCKER_ENGINE_VERSION="20.10.24"
+DOCKER_ENGINE_VERSION="24.0.9"
 COMPOSE_VERSION="v2.20.2"
 
 command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required on the connected build machine."; exit 1; }
@@ -67,7 +67,7 @@ echo "==> Installing bundled Docker Engine..."
 install -d -m 0755 /usr/local/bin
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-tar -xzf "$DOCKER_DIR/docker-20.10.24.tgz" -C "$TMP"
+tar -xzf "$DOCKER_DIR/docker-24.0.9.tgz" -C "$TMP"
 install -m 0755 "$TMP/docker/"* /usr/local/bin/
 
 echo "==> Installing bundled Docker Compose..."

@@ -11,7 +11,7 @@ from .mapping_manager import ParserMappingManager
 from .normalizer import NormalizedRecord, normalize_type_and_cargo
 from .reference_db import ReferenceDB, VesselContext
 from .source_registry import get_source_label, is_valid_imo, is_valid_mmsi, sanitize_string
-from .track_state import TrackStateDB
+from .track_state import MMSI_REFERENCE_FIELDS, TrackStateDB
 from .unlocode import resolve_destination
 
 log = logging.getLogger("parser.enricher")
@@ -124,19 +124,14 @@ class VesselEnricher:
                 if candidate and is_valid_mmsi(candidate):
                     effective_mmsi = candidate
                     break
-        if effective_mmsi and is_valid_mmsi(effective_mmsi):
-            is_active = self.state_db.upsert(
-                mmsi=effective_mmsi,
-                imo=incoming_imo or ctx.wrs_imo,
-                vessel_name=incoming_name or ctx.wrs_vessel_name,
-                latitude=rec.kinematic_pos_lla_lat,
-                longitude=rec.kinematic_pos_lla_lon,
-                tx_timestamp_iso=str(rec.timestamp_source or ""),
-                source=rec.source_name,
-            )
-            rec.track_flag_active = is_active
-        else:
-            rec.track_flag_active = True
+
+        # Persistent per-MMSI fallback is deliberately consulted after the
+        # reference databases are resolved. It is the final source only.
+        history = (
+            self.state_db.get_reference(effective_mmsi)
+            if effective_mmsi and is_valid_mmsi(effective_mmsi)
+            else {}
+        )
 
         ref_mmsi = ctx.pans_mmsi or ctx.nsc_mmsi or ctx.wrs_mmsi
         try:
@@ -279,7 +274,24 @@ class VesselEnricher:
                         break
                 if getattr(rec, attr, None):
                     break
-        if ctx.wrs_status_decode: rec.cat_annotation = ctx.wrs_status_decode
+
+        # Final fallback: the cumulative last-known reference for this MMSI.
+        # Only fields in MMSI_REFERENCE_FIELDS are eligible, so dynamic
+        # position/kinematics/timestamps are never copied from an old message.
+        history_recovered = []
+        for logical in MMSI_REFERENCE_FIELDS:
+            attr = LOGICAL_TO_ATTR.get(logical)
+            if not attr or getattr(rec, attr, None) not in (None, ""):
+                continue
+            value = history.get(logical)
+            if value not in (None, ""):
+                if logical == "voyage.destination":
+                    value = resolve_destination(value)
+                setattr(rec, attr, value)
+                history_recovered.append(logical)
+
+        if ctx.wrs_status_decode and not rec.cat_annotation:
+            rec.cat_annotation = ctx.wrs_status_decode
 
         # Remarks are built only from explicit evidence. PANS/NSC CLEARED
         # currently records that the vessel was resolved in that reference DB.
@@ -354,8 +366,9 @@ class VesselEnricher:
                 deduped.append(remark)
         rec.vessel_remarks = " | ".join(deduped)
 
-        # Preserve field-level provenance for acceptance/audit tooling. This is
-        # metadata only and does not alter the canonical XML values.
+        # Preserve field-level provenance for acceptance/audit tooling. The
+        # classification follows the actual enrichment order: incoming -> PANS
+        # -> NSC -> WRS -> persistent MMSI history.
         reference_candidates = {
             "ais.typeAndCargo": {
                 "PANS": ("pans_vessel_type",), "NSC": ("nsc_type",),
@@ -367,10 +380,10 @@ class VesselEnricher:
             "id.callsign": {"PANS": ("pans_callsign",), "NSC": ("nsc_callsign",), "WRS": ("wrs_callsign",)},
             "id.imo": {"PANS": ("pans_imo",), "NSC": ("nsc_imo",), "WRS": ("wrs_imo",)},
             "id.mmsi.destination": {"WRS": ("wrs_vigilance_score",)},
-            "vessel.beam": {"PANS": ("pans_breadth", "pans_beam"), "WRS": ("wrs_breadth", "wrs_beam")},
+            "vessel.beam": {"PANS": ("pans_beam",), "WRS": ("wrs_breadth",)},
             "vessel.description": {"PANS": ("pans_vessel_type",), "NSC": ("nsc_type",), "WRS": ("wrs_vessel_type",)},
-            "vessel.draft": {"PANS": ("pans_draft", "pans_max_draft"), "WRS": ("wrs_draft", "wrs_max_draft")},
-            "vessel.grosstonnage": {"PANS": ("pans_grt",), "WRS": ("wrs_gross", "wrs_grt")},
+            "vessel.draft": {"PANS": ("pans_max_draft",), "WRS": ("wrs_draft",)},
+            "vessel.grosstonnage": {"PANS": ("pans_grt",), "WRS": ("wrs_gross",)},
             "vessel.length": {"PANS": ("pans_loa",), "WRS": ("wrs_loa",)},
             "vessel.name": {"PANS": ("pans_vessel_name",), "NSC": ("nsc_vessel_name",), "WRS": ("wrs_vessel_name",)},
             "voyage.arrival": {"PANS": ("pans_berman_eta",), "WRS": ("wrs_calling_arrival",)},
@@ -389,15 +402,56 @@ class VesselEnricher:
             if incoming_values.get(attr) not in (None, ""):
                 provenance[logical] = "INCOMING"
                 continue
+
             matched_source = None
-            for source in ("PANS", "NSC", "WRS"):
+            for source in ref_order:
                 for field in reference_candidates.get(logical, {}).get(source, ()):
                     ref_value = getattr(ctx, field, None)
-                    if ref_value not in (None, "") and str(value) == str(ref_value):
+                    if ref_value in (None, ""):
+                        continue
+                    if logical == "ais.typeAndCargo" and source == "WRS" and ctx.wrs_ais_type_code is not None:
+                        try:
+                            if str(value) == str(normalize_type_and_cargo(ctx.wrs_ais_type_code)):
+                                matched_source = source
+                                break
+                        except Exception:
+                            pass
+                    elif str(value) == str(ref_value):
                         matched_source = source
                         break
                 if matched_source:
                     break
-            provenance[logical] = matched_source or "DERIVED"
+
+            if matched_source:
+                provenance[logical] = matched_source
+            elif logical in history and history.get(logical) not in (None, "") and str(value) == str(history.get(logical)):
+                provenance[logical] = "MMSI_HISTORY"
+            else:
+                provenance[logical] = "DERIVED"
+
         rec.raw_attributes["enrichment_provenance"] = provenance
-        return rec
+        rec.raw_attributes["mmsi_history_recovered"] = history_recovered
+
+        # Persist the cumulative reference after enrichment. Every transaction
+        # updates the same unique MMSI record; blank current values never erase
+        # an earlier known value. The operation is committed with track state.
+        if effective_mmsi and is_valid_mmsi(effective_mmsi):
+            reference_values = {
+                logical: getattr(rec, attr, None)
+                for logical, attr in LOGICAL_TO_ATTR.items()
+                if logical in MMSI_REFERENCE_FIELDS
+            }
+            rec.track_flag_active = self.state_db.upsert(
+                mmsi=effective_mmsi,
+                imo=rec.id_imo if is_valid_imo(rec.id_imo) else None,
+                vessel_name=rec.vessel_name,
+                latitude=rec.kinematic_pos_lla_lat,
+                longitude=rec.kinematic_pos_lla_lon,
+                tx_timestamp_iso=str(rec.timestamp_source or ""),
+                source=rec.source_name,
+                reference_values=reference_values,
+            )
+        else:
+            rec.track_flag_active = True
+
+

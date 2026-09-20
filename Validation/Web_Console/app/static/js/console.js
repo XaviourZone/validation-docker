@@ -511,7 +511,12 @@
 
     // 10 cells in fixed order — cells are addressed by index in the updater
     tr.innerHTML = `
-      <td class="src-cell-name" title="${src.source_name}">${src.source_name}</td>
+      <td class="src-cell-name">
+        <div class="src-id-editor">
+          <input class="src-id-input" value="${src.source_name}" data-original-source-id="${src.source_name}" title="Edit Source ID">
+          <button class="src-id-save" type="button" title="Save Source ID">Save</button>
+        </div>
+      </td>
       <td class="src-cell-vol-enabled">${_srcEnabledHtml(src.enabled)}</td>
       <td><span class="src-type-badge">${src.type || "?"}</span></td>
       <td class="src-cell-mono" title="${inputCfg}">${inputCfg}</td>
@@ -532,6 +537,32 @@
         </div>
       </td>
     `;
+        const idInput = tr.querySelector(".src-id-input");
+    const idSave = tr.querySelector(".src-id-save");
+    if (idInput && idSave) {
+      idSave.addEventListener("click", async () => {
+        const oldId = idInput.dataset.originalSourceId || src.source_name;
+        const newId = idInput.value.trim();
+        if (!newId || newId === oldId) { idInput.value = oldId; return; }
+        idSave.disabled = true;
+        try {
+          const res = await fetch("/api/router/sources/rename", {
+            method: "POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({old_source_name: oldId, new_source_name: newId})
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.message || "Source ID update failed");
+          await fetch("/api/router/reload", {method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
+          await fetchDashboardData();
+        } catch (e) {
+          alert(e.message);
+          idInput.value = oldId;
+        } finally {
+          idSave.disabled = false;
+        }
+      });
+    }
     return tr;
   }
 

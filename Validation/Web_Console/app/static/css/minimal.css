@@ -551,7 +551,165 @@ html,body{
 
 
 /* --------------------------------------------------------------------------
+   Global application skin
+   Shared visual treatment for every console view. This intentionally sits
+   after page/component rules so the application shell remains consistent
+   while preserving existing DOM, IDs and JavaScript contracts.
+   -------------------------------------------------------------------------- */
+:root{
+  --app-bg:#080b10;
+  --app-surface:rgba(19,24,33,.78);
+  --app-surface-strong:rgba(23,29,40,.88);
+  --app-border:rgba(255,255,255,.085);
+  --app-border-soft:rgba(255,255,255,.055);
+  --app-text:#f4f7fb;
+  --app-muted:#8d98a8;
+  --app-blue:#5aaeff;
+  --app-shadow:0 18px 55px rgba(0,0,0,.20);
+}
+html,body{background:var(--app-bg)!important;color:var(--app-text)!important}
+body{
+  background:
+    radial-gradient(circle at 82% 0%,rgba(10,132,255,.075),transparent 30%),
+    radial-gradient(circle at 18% 100%,rgba(92,70,180,.055),transparent 28%),
+    var(--app-bg)!important;
+}
+.content-wrapper{background:transparent!important}
+.content-body{
+  width:100%!important;
+  max-width:none!important;
+  padding:28px 30px!important;
+}
+.view-tab{
+  width:100%!important;
+  max-width:1540px!important;
+  margin:0 auto!important;
+  padding-bottom:28px!important;
+}
+.view-tab > .panel,
+.view-tab > .kpi-grid,
+.view-tab > .database-admin-grid,
+.view-tab > .database-inventory-panel{
+  width:100%;
+}
+.view-tab > .panel{
+  margin-bottom:18px!important;
+}
+.panel,
+.kpi-card,
+.module-card,
+.database-source-card,
+.database-inventory-panel{
+  background:
+    linear-gradient(145deg,rgba(28,34,45,.84),rgba(13,17,24,.78))!important;
+  border:1px solid var(--app-border)!important;
+  border-radius:18px!important;
+  box-shadow:var(--app-shadow),inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+.panel-header{
+  min-height:54px!important;
+  background:rgba(255,255,255,.018)!important;
+  border-bottom:1px solid var(--app-border-soft)!important;
+  padding:0 18px!important;
+}
+.panel-title{font-size:13px!important;font-weight:700!important;letter-spacing:-.01em}
+.panel-body{padding:18px!important}
+.kpi-grid{
+  gap:14px!important;
+  margin-bottom:18px!important;
+}
+.kpi-card{
+  min-height:104px!important;
+  padding:18px!important;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease!important;
+}
+.kpi-card:hover,
+.module-card:hover,
+.database-source-card:hover{
+  transform:translateY(-1px);
+  border-color:rgba(90,174,255,.20)!important;
+}
+.kpi-title{
+  color:var(--app-muted)!important;
+  font-size:10px!important;
+  font-weight:650!important;
+  letter-spacing:.09em!important;
+}
+.kpi-value{
+  color:var(--app-text)!important;
+  font-size:26px!important;
+  font-weight:700!important;
+}
+.module-grid{gap:14px!important}
+.module-card{padding:18px!important}
+.data-table{
+  width:100%!important;
+  border-collapse:separate!important;
+  border-spacing:0!important;
+}
+.data-table th{
+  background:rgba(255,255,255,.025)!important;
+  color:#8f9aaa!important;
+  border-bottom:1px solid var(--app-border)!important;
+  font-size:10px!important;
+  text-transform:uppercase!important;
+  letter-spacing:.07em!important;
+  padding:11px 12px!important;
+}
+.data-table td{
+  border-bottom:1px solid rgba(255,255,255,.045)!important;
+  color:#dce2ea!important;
+  padding:11px 12px!important;
+}
+.data-table tbody tr:hover td{background:rgba(255,255,255,.025)!important}
+.btn{
+  border-radius:10px!important;
+  transition:transform .15s ease,background .15s ease,border-color .15s ease!important;
+}
+.btn:hover{transform:translateY(-1px)!important}
+.form-input,.form-select,.database-file-input{
+  min-height:38px!important;
+  border-radius:10px!important;
+  background:rgba(5,9,15,.48)!important;
+  border:1px solid rgba(255,255,255,.09)!important;
+  color:var(--app-text)!important;
+}
+.form-input:focus,.form-select:focus{
+  border-color:rgba(90,174,255,.55)!important;
+  box-shadow:0 0 0 3px rgba(10,132,255,.10)!important;
+}
+.database-admin-grid{
+  display:grid!important;
+  gap:18px!important;
+}
+.database-source-card{overflow:hidden}
+.database-source-header{
+  background:rgba(255,255,255,.018)!important;
+  border-bottom:1px solid var(--app-border-soft)!important;
+}
+.status-pill{box-shadow:inset 0 1px 0 rgba(255,255,255,.08)!important}
+.content-footer{
+  flex:0 0 auto!important;
+  width:100%!important;
+  padding:11px 30px 15px!important;
+  text-align:center!important;
+  color:#697585!important;
+  font-size:10px!important;
+  letter-spacing:.025em!important;
+  border-top:1px solid rgba(255,255,255,.06)!important;
+  background:rgba(5,8,12,.28)!important;
+}
+@media(max-width:800px){
+  .content-body{padding:20px 16px!important}
+  .view-tab{padding-bottom:20px!important}
+  .content-footer{padding-left:16px!important;padding-right:16px!important}
+}
+
+/* --------------------------------------------------------------------------
    Global application layout
+   The same visual/layout treatment applies to every console page, not only
+   Data Router. Page-specific components retain their existing structure.
+   -------------------------------------------------------------------------- */
    The same visual/layout treatment applies to every console page, not only
    Data Router. Page-specific components retain their existing structure.
    -------------------------------------------------------------------------- */

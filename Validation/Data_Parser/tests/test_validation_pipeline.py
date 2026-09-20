@@ -275,8 +275,9 @@ class TestValidationPipeline(unittest.TestCase):
     # ──────────────────────────────────────────────────────────────────────────
 
     def test_spoofing_detection_and_remarks(self):
-        # Remarks are line-oriented and always include the three reference
-        # source match statuses plus MMSI/IMO/name transmitted-vs-actual values.
+        # Vessel remarks contain the selected WRS/PANS/NSC intelligence
+        # categories and the source feed. Live identity/position is not
+        # overwritten by reference data.
         rec = NormalizedRecord(
             source_name="MSIS",
             message_id="m1",
@@ -284,14 +285,17 @@ class TestValidationPipeline(unittest.TestCase):
             vessel_name="MY VESSEL",
         )
         enr = self.enricher.enrich(rec)
-        self.assertIn("NSC      | CLEARED", enr.vessel_remarks)
-        self.assertIn("PANS     | CLEARED", enr.vessel_remarks)
-        self.assertIn("WRS      | CLEARED", enr.vessel_remarks)
-        self.assertIn("SPOOFING | MMSI", enr.vessel_remarks)
-        self.assertIn("TRANSMITTING=", enr.vessel_remarks)
-        self.assertIn("ACTUAL=", enr.vessel_remarks)
+        self.assertIn("WRS      | AIS SPOOFING RISK", enr.vessel_remarks)
+        self.assertIn("WRS      | AIS GAP RISK", enr.vessel_remarks)
+        self.assertIn("WRS      | VIGILANCE SCORE", enr.vessel_remarks)
+        self.assertIn("WRS      | SANCTIONS", enr.vessel_remarks)
+        self.assertIn("PANS     | VOYAGE", enr.vessel_remarks)
+        self.assertIn("PANS     | CARGO", enr.vessel_remarks)
+        self.assertIn("NSC      | REGION", enr.vessel_remarks)
+        self.assertIn("NSC      | VALIDITY", enr.vessel_remarks)
         self.assertIn("SOURCE   | FEED", enr.vessel_remarks)
-        self.assertNotIn("VIGILANCE SCORE", enr.vessel_remarks)
+        self.assertNotIn("AIS IDENTITY RISK", enr.vessel_remarks)
+        self.assertNotIn("SPOOFING | MMSI", enr.vessel_remarks)
 
     # ──────────────────────────────────────────────────────────────────────────
     # 8. All Sources (Normal End-to-End through PipelineProcessor)

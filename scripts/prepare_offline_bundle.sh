@@ -33,14 +33,16 @@ python3 -m pip download --only-binary=:all: --dest "${WHEELS}" \
 
 echo "[2/5] Pulling Python base image..."
 docker pull python:3.14-slim
+rm -f "${IMAGES}/python-3.14-slim.tar"
+docker save -o "${IMAGES}/python-3.14-slim.tar" python:3.14-slim
 
-echo "[3/5] Building Validation application image..."
+ echo "[3/5] Building Validation application image..."
 docker compose build --no-cache parser
 
 echo "[4/5] Exporting application image..."
 rm -f "${IMAGES}/validation-parser-dev.tar"
 docker save -o "${IMAGES}/validation-parser-dev.tar" validation/parser:dev
-sha256sum "${IMAGES}/validation-parser-dev.tar" > "${IMAGES}/SHA256SUMS"
+sha256sum "${IMAGES}/python-3.14-slim.tar" "${IMAGES}/validation-parser-dev.tar" > "${IMAGES}/SHA256SUMS"
 
 echo "[5/5] Writing Python wheel manifest..."
 (

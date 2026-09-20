@@ -1300,28 +1300,104 @@
     
     // Populate Tables Inventory
     const tbody = document.getElementById("db-tables-body");
-    if (tbody) {
-      const rows = [];
-      const addTables = (dbName, tablesDict) => {
-        if (!tablesDict) return;
-        Object.keys(tablesDict).sort().forEach(tName => {
-          rows.push(`<tr>
-            <td><strong style="color: var(--accent-cyan); font-size: 11px;">${dbName}</strong></td>
-            <td style="font-family: var(--font-mono); font-size: 11px;">${tName}</td>
-            <td style="font-family: var(--font-mono); font-size: 11px;">${tablesDict[tName]}</td>
-          </tr>`);
+    const dbSelect = document.getElementById("db-view-database");
+    const tableSelect = document.getElementById("db-view-table");
+    const tableInventory = [];
+
+    const addTables = (dbName, tablesDict) => {
+      if (!tablesDict) return;
+      Object.keys(tablesDict).sort().forEach((tName) => {
+        tableInventory.push({
+          database: dbName,
+          table: tName,
+          rows: Number(tablesDict[tName] || 0),
         });
-      };
-      if (data.wrs) addTables("WRS", data.wrs.tables);
-      if (data.pans) addTables("PANS", data.pans.tables);
-      if (data.nsc) addTables("NSC", data.nsc.tables);
-      
-      if (rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="3" style="text-align: center;">No tables found in active databases</td></tr>`;
+      });
+    };
+
+    if (data.wrs) addTables("WRS", data.wrs.tables);
+    if (data.pans) addTables("PANS", data.pans.tables);
+    if (data.nsc) addTables("NSC", data.nsc.tables);
+
+    if (tbody) {
+      if (tableInventory.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No tables found in active databases</td></tr>';
       } else {
-        tbody.innerHTML = rows.join("");
+        tbody.innerHTML = tableInventory.map((item) => `
+          <tr data-db-table-row="1" data-db-name="${item.database}" data-table-name="${item.table}" style="cursor:pointer">
+            <td><strong style="color:var(--accent-cyan);font-size:11px;">${item.database}</strong></td>
+            <td style="font-family:var(--font-mono);font-size:11px;">${item.table}</td>
+            <td style="font-family:var(--font-mono);font-size:11px;">${item.rows.toLocaleString()}</td>
+            <td><button type="button" class="btn btn-secondary db-view-row-button" style="padding:4px 8px;font-size:11px;">View</button></td>
+          </tr>`).join("");
       }
     }
+
+    if (dbSelect) {
+      const currentDb = dbSelect.value;
+      dbSelect.innerHTML = '<option value="">Select DB</option>';
+      [...new Set(tableInventory.map((x) => x.database))].forEach((db) => {
+        const opt = document.createElement("option");
+        opt.value = db;
+        opt.textContent = db;
+        dbSelect.appendChild(opt);
+      });
+      if (tableInventory.some((x) => x.database === currentDb)) dbSelect.value = currentDb;
+    }
+
+    if (tableSelect) {
+      const currentTable = tableSelect.value;
+      const selectedDb = dbSelect ? dbSelect.value : "";
+      tableSelect.innerHTML = '<option value="">Select Table</option>';
+      tableInventory
+        .filter((x) => !selectedDb || x.database === selectedDb)
+        .forEach((item) => {
+          const opt = document.createElement("option");
+          opt.value = item.database + "|" + item.table;
+          opt.textContent = item.table + " (" + item.rows.toLocaleString() + ")";
+          tableSelect.appendChild(opt);
+        });
+      if ([...tableSelect.options].some((o) => o.value === currentTable)) tableSelect.value = currentTable;
+    }
+
+    if (tbody && !tbody.dataset.viewerBound) {
+      tbody.dataset.viewerBound = "1";
+      tbody.addEventListener("click", (event) => {
+        const row = event.target.closest("[data-db-table-row]");
+        if (!row) return;
+        const db = row.dataset.dbName;
+        const table = row.dataset.tableName;
+        if (dbSelect) dbSelect.value = db;
+        if (tableSelect) {
+          const value = db + "|" + table;
+          if (![...tableSelect.options].some((o) => o.value === value)) {
+            const opt = document.createElement("option");
+            opt.value = value;
+            opt.textContent = table;
+            tableSelect.appendChild(opt);
+          }
+          tableSelect.value = value;
+        }
+        if (window.databaseTableViewer?.open) window.databaseTableViewer.open(db, table);
+      });
+    }
+
+    if (dbSelect && !dbSelect.dataset.viewerBound) {
+      dbSelect.dataset.viewerBound = "1";
+      dbSelect.addEventListener("change", () => {
+        if (!tableSelect) return;
+        tableSelect.innerHTML = '<option value="">Select Table</option>';
+        tableInventory
+          .filter((x) => !dbSelect.value || x.database === dbSelect.value)
+          .forEach((item) => {
+            const opt = document.createElement("option");
+            opt.value = item.database + "|" + item.table;
+            opt.textContent = item.table + " (" + item.rows.toLocaleString() + ")";
+            tableSelect.appendChild(opt);
+          });
+      });
+    }
+
   }
 
   // Run on DOM ready

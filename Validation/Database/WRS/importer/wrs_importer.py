@@ -104,78 +104,123 @@ def create_table_from_headers(conn, table_name, headers):
     return cols
 
 def process_csv_file(conn, file_path, batch_id, is_decode, batch_size=10000):
-    """Process a single CSV file and load it into the database."""
+    """Process a single CSV file and load it into the database.
+
+    WRS source exports are not guaranteed to use UTF-8. Try UTF-8 first,
+    then Windows-1252 and finally ISO-8859-1. A decode failure rolls back
+    the current file transaction before retrying with the next encoding, so
+    no partial rows from a failed attempt remain in the staging database.
+    """
     log = logging.getLogger("wrs_importer")
     start_time = time.monotonic()
-    
+
     table_name = infer_table_name(file_path.name, is_decode)
     file_size = file_path.stat().st_size
     file_hash = sha256_file(file_path)
-    
+
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO import_file 
+        INSERT INTO import_file
         (batch_id, source_system, file_name, file_path, file_hash_sha256, file_size_bytes, target_table, discovered_at, status)
         VALUES (?, 'WRS', ?, ?, ?, ?, ?, datetime('now'), 'RUNNING')
     """, (batch_id, file_path.name, str(file_path), file_hash, file_size, table_name))
     file_id = cur.lastrowid
     conn.commit()
 
-    rows_loaded = 0
-    try:
-        with open(file_path, "r", encoding="utf-8-sig", newline="") as f:
-            reader = csv.reader(f)
-            try:
-                headers = next(reader)
-            except StopIteration:
-                raise ValueError("Empty CSV file")
-            
-            cols = create_table_from_headers(conn, table_name, headers)
-            placeholders = ",".join(["?"] * len(cols))
-            insert_sql = f'INSERT INTO "{table_name}" VALUES ({placeholders})'
-            
-            batch = []
-            for row in reader:
-                # Pad row if it has fewer columns than headers
-                if len(row) < len(cols):
-                    row.extend([""] * (len(cols) - len(row)))
-                # Truncate if it has more
-                elif len(row) > len(cols):
-                    row = row[:len(cols)]
-                    
-                batch.append(row)
-                
-                if len(batch) >= batch_size:
+    encodings = ("utf-8-sig", "cp1252", "latin-1")
+    last_decode_error = None
+
+    for encoding_index, encoding in enumerate(encodings):
+        rows_loaded = 0
+        try:
+            with open(file_path, "r", encoding=encoding, newline="") as f:
+                reader = csv.reader(f)
+                try:
+                    headers = next(reader)
+                except StopIteration:
+                    raise ValueError("Empty CSV file")
+
+                cols = create_table_from_headers(conn, table_name, headers)
+                placeholders = ",".join(["?"] * len(cols))
+                insert_sql = f'INSERT INTO "{table_name}" VALUES ({placeholders})'
+
+                batch = []
+                for row in reader:
+                    if len(row) < len(cols):
+                        row.extend([""] * (len(cols) - len(row)))
+                    elif len(row) > len(cols):
+                        row = row[:len(cols)]
+
+                    batch.append(row)
+
+                    if len(batch) >= batch_size:
+                        conn.executemany(insert_sql, batch)
+                        rows_loaded += len(batch)
+                        batch = []
+
+                if batch:
                     conn.executemany(insert_sql, batch)
                     rows_loaded += len(batch)
-                    batch = []
-                    
-            if batch:
-                conn.executemany(insert_sql, batch)
-                rows_loaded += len(batch)
-                
-        conn.commit()
-        
-        cur.execute("""
-            UPDATE import_file 
-            SET loaded_at = datetime('now'), status = 'COMPLETED', rows_loaded = ?
-            WHERE file_id = ?
-        """, (rows_loaded, file_id))
-        conn.commit()
-        
-        log.info(f"Loaded {table_name}: {rows_loaded} rows in {time.monotonic() - start_time:.2f}s")
-        return True, rows_loaded
-        
-    except Exception as e:
-        conn.rollback()
-        log.error(f"Failed to process {file_path.name}: {e}")
-        cur.execute("""
-            UPDATE import_file 
-            SET loaded_at = datetime('now'), status = 'FAILED', error_message = ?
-            WHERE file_id = ?
-        """, (str(e), file_id))
-        conn.commit()
-        return False, 0
+
+            conn.commit()
+
+            cur.execute("""
+                UPDATE import_file
+                SET loaded_at = datetime('now'), status = 'COMPLETED', rows_loaded = ?, error_message = NULL
+                WHERE file_id = ?
+            """, (rows_loaded, file_id))
+            conn.commit()
+
+            if encoding_index > 0:
+                log.warning(
+                    "Loaded %s using fallback encoding %s after UTF-8 decoding failed.",
+                    file_path.name,
+                    encoding,
+                )
+            log.info(
+                f"Loaded {table_name}: {rows_loaded} rows in "
+                f"{time.monotonic() - start_time:.2f}s"
+            )
+            return True, rows_loaded
+
+        except UnicodeDecodeError as exc:
+            conn.rollback()
+            last_decode_error = exc
+            if encoding_index < len(encodings) - 1:
+                log.warning(
+                    "UTF/text decoding failed for %s with %s at byte %s; "
+                    "retrying with %s.",
+                    file_path.name,
+                    encoding,
+                    exc.start,
+                    encodings[encoding_index + 1],
+                )
+                continue
+
+        except Exception as e:
+            conn.rollback()
+            log.error(f"Failed to process {file_path.name}: {e}")
+            cur.execute("""
+                UPDATE import_file
+                SET loaded_at = datetime('now'), status = 'FAILED', error_message = ?
+                WHERE file_id = ?
+            """, (str(e), file_id))
+            conn.commit()
+            return False, 0
+
+    conn.rollback()
+    error_message = (
+        f"Unable to decode CSV using {', '.join(encodings)}: {last_decode_error}"
+    )
+    log.error(f"Failed to process {file_path.name}: {error_message}")
+    cur.execute("""
+        UPDATE import_file
+        SET loaded_at = datetime('now'), status = 'FAILED', error_message = ?
+        WHERE file_id = ?
+    """, (error_message, file_id))
+    conn.commit()
+    return False, 0
+
 
 def run_import(config, dry_run=False):
     log = logging.getLogger("wrs_importer")
@@ -299,6 +344,15 @@ def run_import(config, dry_run=False):
         return True
     else:
         log.warning("WRS active database was not replaced due to errors.")
+        # The staging DB is disposable build state. Remove it after a failed
+        # import so a partial/stale staging file cannot be mistaken for a
+        # running or usable WRS database and does not consume disk space.
+        try:
+            if staging_path.exists():
+                staging_path.unlink()
+                log.info(f"Removed failed WRS staging database: {staging_path}")
+        except Exception as cleanup_error:
+            log.warning(f"Could not remove failed WRS staging database: {cleanup_error}")
         return False
 
 def main():

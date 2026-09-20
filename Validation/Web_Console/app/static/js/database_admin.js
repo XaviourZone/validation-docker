@@ -177,6 +177,22 @@
     return value.toFixed(index ? 1 : 0) + " " + units[index];
   }
 
+  async function waitForWrsRefresh() {
+    const started = Date.now();
+    const timeout = 10 * 60 * 1000;
+    while (Date.now() - started < timeout) {
+      try {
+        const status = await requestJson("/api/database/status");
+        if (!status.wrs?.is_refreshing) return status.wrs || {};
+      } catch (_) {
+        // Keep waiting; the next poll can recover from a transient request failure.
+      }
+      if (window.consoleApp?.showLoading) window.consoleApp.showLoading("Updating WRS", "WRS database refresh is running. Please wait…");
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+    throw new Error("WRS refresh is still running after 10 minutes. Check the WRS status before trying again.");
+  }
+
   async function updateWrs() {
     const button = byId("btn-wrs-update");
     if (button?.disabled) return;
@@ -184,21 +200,44 @@
       setFeedback("db-wrs-feedback", "Select a WRS folder from this computer first.", "error");
       return;
     }
+
+    let refreshStarted = false;
     if (window.consoleApp?.showLoading) window.consoleApp.showLoading("Updating WRS", "Uploading the selected folder and rebuilding the WRS database…");
     setBusy("btn-wrs-update", true, "Updating…");
+
     try {
       const data = await uploadFolder("wrs");
       if (!data) return;
+
       setFeedback("db-wrs-feedback", "WRS database refresh started. Please wait…", "warning");
       const refresh = await requestJson("/api/database/wrs/refresh", {method: "POST"});
-      setFeedback("db-wrs-feedback", refresh.message || "WRS update started.", "success");
+      refreshStarted = true;
+
+      if (refresh.message) setFeedback("db-wrs-feedback", refresh.message, "warning");
+      await waitForWrsRefresh();
+
+      setFeedback("db-wrs-feedback", "WRS database updated successfully.", "success");
       if (window.consoleApp?.refresh) window.consoleApp.refresh();
     } catch (error) {
       const msg = error.message || "";
-      setFeedback("db-wrs-feedback", msg.toLowerCase().includes("already running") ? "WRS refresh is already running. Please wait for it to finish." : msg, msg.toLowerCase().includes("already running") ? "warning" : "error");
+      const alreadyRunning = msg.toLowerCase().includes("already running");
+      setFeedback(
+        "db-wrs-feedback",
+        alreadyRunning ? "WRS refresh is already running. Please wait for it to finish." : msg,
+        alreadyRunning ? "warning" : "error"
+      );
+      if (alreadyRunning) refreshStarted = true;
     } finally {
       setBusy("btn-wrs-update", false);
+      if (refreshStarted) {
+        const currentButton = byId("btn-wrs-update");
+        if (currentButton) {
+          currentButton.disabled = true;
+          currentButton.title = "WRS refresh is already running";
+        }
+      }
       if (window.consoleApp?.hideLoading) window.consoleApp.hideLoading();
+      if (window.consoleApp?.refresh) window.consoleApp.refresh();
     }
   }
 

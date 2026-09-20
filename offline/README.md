@@ -3,12 +3,13 @@
 This directory is the air-gap package location.
 
 - `python-wheels/` contains Python wheels required to build the Validation image without PyPI access.
-- `docker-rpms/` contains Docker Engine, containerd, Buildx, Compose and resolved RPM dependencies.
+- `docker-rpms/` contains Docker Engine, containerd, Buildx, Compose and resolved RPM dependencies for RHEL 9 deployments.
+- `docker-debs/` contains Docker Engine, containerd, Buildx, Compose and resolved DEB dependencies for Ubuntu 26.04 deployments.
 - `images/` contains the exported Validation Docker image.
 - `SHA256SUMS` files verify the transferred artifacts.
 
 The production host does **not** need Python or the Validation Python packages installed on the host. It needs Docker Engine, the Compose plugin, the project files, and the exported Validation image.
 
-For the current deployment tooling the Docker RPM target is RHEL 9 x86_64. Generate the RPM bundle on an internet-connected machine matching the production OS and architecture.
+For Ubuntu 26.04 x86_64, generate the DEB bundle on an internet-connected Ubuntu 26.04 x86_64 machine using `scripts/download_docker_debs_ubuntu2604.sh`, then transfer `offline/docker-debs/` with the repository and image tar files to the air-gapped host. Install with `scripts/install_offline_ubuntu2604.sh`.
 
-Docker's official RHEL documentation supports RHEL 8, 9 and 10 and documents offline RPM installation.
+The existing RHEL 9 tooling remains available separately via `scripts/download_docker_rpms_rhel9.sh` and `scripts/install_offline_rhel9.sh`.

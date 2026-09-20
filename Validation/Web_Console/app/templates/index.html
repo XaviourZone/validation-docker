@@ -90,7 +90,7 @@
             <div class="database-source-label">WRS source folder</div>
             <div class="database-folder-row">
               <input id="db-wrs-folder" class="form-input" readonly placeholder="Select WRS folder">
-              <button class="btn btn-secondary" id="btn-wrs-browse" type="button" data-folder-browser-target="db-wrs-folder" data-folder-browser-title="Select WRS folder">Browse…</button>
+              <button class="btn btn-secondary" id="btn-wrs-browse" type="button" data-folder-browser-target="db-wrs-folder" data-folder-browser-api="/api/database/filesystem/browse" data-folder-browser-title="Select WRS folder">Browse…</button>
             </div>
             <div class="database-source-hint">The selected WRS folder must contain <strong>Datasets</strong> and <strong>Decode files</strong>.</div>
             <div class="database-subfolder-grid">
@@ -118,7 +118,7 @@
             <div class="database-source-label">PANS XML source folder</div>
             <div class="database-folder-row">
               <input id="db-pans-folder" class="form-input" readonly placeholder="Select PANS XML folder">
-              <button class="btn btn-secondary" id="btn-pans-browse" type="button" data-folder-browser-target="db-pans-folder" data-folder-browser-title="Select PANS XML folder">Browse…</button>
+              <button class="btn btn-secondary" id="btn-pans-browse" type="button" data-folder-browser-target="db-pans-folder" data-folder-browser-api="/api/database/filesystem/browse" data-folder-browser-title="Select PANS XML folder">Browse…</button>
             </div>
             <div class="database-source-hint">XML files in this folder are continuously monitored and imported. No Start/Stop/Process controls are required.</div>
             <div id="db-pans-feedback" class="database-feedback" aria-live="polite"></div>
@@ -140,7 +140,7 @@
             <div class="database-source-stat-row"><span>West records</span><strong id="db-nsc-west">0</strong></div>
             <div class="database-file-picker">
               <div class="database-source-label">NSC EAST</div>
-              <input id="db-nsc-east-file" class="database-file-input" type="file" accept=".xlsx,.xls,.csv">
+              <input id="db-nsc-east-file" class="database-file-input" type="file" accept=".xlsx,.csv">
               <div id="db-nsc-east-name" class="database-file-name">No file selected</div>
             </div>
             <div class="database-file-picker">

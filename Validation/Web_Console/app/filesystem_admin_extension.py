@@ -43,10 +43,7 @@ def install_filesystem_admin_extension(handler_class, logger):
         raw = (query.get("path") or [""])[0].strip()
         try:
             if not raw:
-                self._json_response({"roots": [
-                    {"name": str(p), "path": str(p), "readable": os.access(p, os.R_OK | os.X_OK)}
-                    for p in _roots()
-                ]})
+                self._json_response({"roots": _roots()})
                 return
             # The operator browser works in host filesystem coordinates.
             # Docker exposes the host root read-only at VALIDATION_HOST_FILESYSTEM_ROOT.

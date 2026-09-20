@@ -8,9 +8,11 @@ Provides a single ReferenceDB object that:
 - uses in-process SQLite (thread-safe in WAL mode)
 """
 
+import copy
 import logging
 import sqlite3
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -145,6 +147,11 @@ class ReferenceDB:
         self._pans_path = pans_path or _find_default_db("PANS", "pans.db")
         self._nsc_path  = nsc_path or _find_default_db("NSC", "nsc.db")
         self._lock = threading.Lock()
+        # Reference DBs are read-only during parsing. A bounded cache avoids
+        # repeating the same multi-query WRS/PANS/NSC resolution for every AIS
+        # transmission of the same identity tuple.
+        self._resolve_cache: OrderedDict[tuple, VesselContext] = OrderedDict()
+        self._resolve_cache_max = 8192
 
         self._wrs_conn  = self._open(self._wrs_path,  "WRS")
         self._pans_conn = self._open(self._pans_path, "PANS")
@@ -173,8 +180,14 @@ class ReferenceDB:
         Resolve all reference data for a vessel in one call.
         Uses MMSI as primary key; falls back to IMO, callsign, name.
         """
-        ctx = VesselContext()
+        key = self._resolve_cache_key(mmsi, imo, callsign, vessel_name)
         with self._lock:
+            cached = self._resolve_cache.get(key)
+            if cached is not None:
+                self._resolve_cache.move_to_end(key)
+                return copy.deepcopy(cached)
+
+            ctx = VesselContext()
             self._resolve_wrs(ctx, mmsi, imo, callsign, vessel_name)
             self._resolve_pans(ctx, mmsi, imo, callsign, vessel_name)
             self._resolve_nsc(ctx, mmsi, imo, callsign, vessel_name)
@@ -189,7 +202,31 @@ class ReferenceDB:
                     ctx.primary_mmsi_source = "NSC"
                 elif ctx.wrs_matched and ctx.wrs_match_method == "MMSI":
                     ctx.primary_mmsi_source = "WRS"
-        return ctx
+
+            self._resolve_cache[key] = copy.deepcopy(ctx)
+            self._resolve_cache.move_to_end(key)
+            while len(self._resolve_cache) > self._resolve_cache_max:
+                self._resolve_cache.popitem(last=False)
+            return ctx
+
+    @staticmethod
+    def _resolve_cache_key(
+        mmsi: Optional[int],
+        imo: Optional[int],
+        callsign: Optional[str],
+        vessel_name: Optional[str],
+    ) -> tuple:
+        def norm_text(value):
+            if value in (None, ""):
+                return None
+            return str(value).strip().upper()
+
+        return (
+            int(mmsi) if mmsi is not None else None,
+            int(imo) if imo is not None else None,
+            norm_text(callsign),
+            norm_text(vessel_name),
+        )
 
     # ── WRS ──────────────────────────────────────────────────────────────────
 
@@ -448,6 +485,9 @@ class ReferenceDB:
                 ctx.pans_berman_etd  = _str(berman["EDTD"])
                 ctx.pans_draft_fwd   = _to_float(berman["DraftFwd"])
                 ctx.pans_draft_aft   = _to_float(berman["DraftAft"])
+                ctx.record_provenance("voyage.destination", ctx.pans_berman_dest, "PANS", match_method)
+                ctx.record_provenance("voyage.arrival", ctx.pans_berman_eta, "PANS", match_method)
+                ctx.record_provenance("voyage.etd", ctx.pans_berman_etd, "PANS", match_method)
 
     # ── NSC ──────────────────────────────────────────────────────────────────
 

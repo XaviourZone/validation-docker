@@ -13,6 +13,8 @@ services:
       - ./runtime/parser-logs:/opt/validation/Validation/Data_Parser/logs
       - ./runtime/parser-state:/opt/validation/Validation/state
       - ./runtime/reference:/opt/validation/runtime/reference
+    environment:
+      VALIDATION_PARSER_INGRESS_DIR: /opt/validation/Validation/state/parser-ingress
     ports:
       - "10001:10001"
       - "10002:10002"

@@ -160,18 +160,6 @@ class ForwarderDummySFTPTest(unittest.TestCase):
             line = server.stdout.readline().strip()
             self.assertTrue(line.startswith("READY "), f"dummy SFTP did not start: {line!r}")
 
-            known_hosts = root / "known_hosts"
-            hosts = paramiko.HostKeys()
-            # The subprocess server does not expose its generated host key to the
-            # parent, so replace the generated key policy only for this isolated
-            # test destination using a known-hosts entry created by a preliminary
-            # local probe is not possible. Instead use a custom client policy by
-            # patching SSHClient only within this test process.
-            original_set_missing = paramiko.SSHClient.set_missing_host_key_policy
-            paramiko.SSHClient.set_missing_host_key_policy = (
-                lambda self, policy: original_set_missing(self, policy)
-            )
-
             SecretStore(secret_file).set("D-DIODE-TEST", PASSWORD)
 
             config = ForwarderConfig(
@@ -241,7 +229,14 @@ class ForwarderDummySFTPTest(unittest.TestCase):
             ).encode("utf-8")
             source.write_bytes(xml)
 
-            service.process_once()
+            # process_once() is the synchronous worker operation and only
+            # processes files while the service is marked running.
+            service.running = True
+            try:
+                service.process_once()
+            finally:
+                service.running = False
+                service.stop()
 
             remote_file = remote / source.name
             remote_part = remote / (source.name + ".part")
@@ -259,6 +254,7 @@ class ForwarderDummySFTPTest(unittest.TestCase):
             self.assertEqual(state["state"], "DELIVERED")
             self.assertEqual(state["attempts"], 1)
             self.assertEqual(service.metrics()["states"]["DELIVERED"], 1)
+            service.state.close()
 
             print("PASS: Forwarder -> dummy SSH/SFTP -> remote folder")
             print(f"PASS: dummy SFTP port {port}")

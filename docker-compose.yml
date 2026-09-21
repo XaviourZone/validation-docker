@@ -54,6 +54,9 @@ services:
       - ./docker:/opt/validation/docker
       - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
       - ./runtime/forwarder-state:/opt/validation/Validation/Data_Forwarder/state
+      - /:/opt/validation/hostfs:rw
+    environment:
+      VALIDATION_HOST_FILESYSTEM_ROOT: /opt/validation/hostfs
     ports:
       - "8082:8082"
 

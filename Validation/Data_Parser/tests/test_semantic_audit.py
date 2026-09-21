@@ -56,8 +56,8 @@ class TestSemanticAudit(unittest.TestCase):
             try:
                 conn.execute(
                     "CREATE TABLE nsc_vessels ("
-                    "ID_MMSI TEXT, ID_IMO TEXT, ID_CALLSIGN TEXT, "
-                    "VESSEL_NAME TEXT, TYPE TEXT)"
+                    "SOURCE_REGION TEXT, ID_MMSI TEXT, ID_IMO TEXT, ID_CALLSIGN TEXT, "
+                    "VESSEL_NAME TEXT, TYPE TEXT, BEGIN_DATE TEXT, END_DATE TEXT)"
                 )
                 conn.execute(
                     "INSERT INTO nsc_vessels "

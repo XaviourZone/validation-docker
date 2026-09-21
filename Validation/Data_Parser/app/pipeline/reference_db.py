@@ -159,28 +159,46 @@ class ReferenceDB:
         self._wrs_path  = wrs_path or _find_default_db("WRS", "wrs.db")
         self._pans_path = pans_path or _find_default_db("PANS", "pans.db")
         self._nsc_path  = nsc_path or _find_default_db("NSC", "nsc.db")
-        self._lock = threading.Lock()
-        # Reference DBs are read-only during parsing. A bounded cache avoids
-        # repeating the same multi-query WRS/PANS/NSC resolution for every AIS
-        # transmission of the same identity tuple.
+        # Reference databases are read-only during parsing. The previous
+        # implementation protected the entire resolve() operation with one
+        # process-wide lock, which serialized every enrichment worker and
+        # effectively defeated VALIDATION_PARSER_RECORD_WORKERS.
+        #
+        # Each parser worker now gets its own SQLite read-only connection.
+        # Only the small cache metadata operations are locked.
+        self._cache_lock = threading.RLock()
+        self._connection_lock = threading.Lock()
+        self._thread_connections: Dict[int, Dict[str, sqlite3.Connection]] = {}
         self._resolve_cache: OrderedDict[tuple, VesselContext] = OrderedDict()
         self._resolve_cache_max = 8192
-
-        self._wrs_conn  = self._open(self._wrs_path,  "WRS")
-        self._pans_conn = self._open(self._pans_path, "PANS")
-        self._nsc_conn  = self._open(self._nsc_path,  "NSC")
 
     def _open(self, path: Path, label: str) -> Optional[sqlite3.Connection]:
         if not path.exists():
             log.warning(f"{label} database not found at {path}")
             return None
         try:
-            conn = sqlite3.connect(str(path), check_same_thread=False)
+            # Reference DBs are lookup-only. Opening read-only prevents an
+            # enrichment worker from ever creating/writing the reference DB.
+            uri = f"file:{path.resolve()}?mode=ro"
+            conn = sqlite3.connect(uri, uri=True, check_same_thread=False, timeout=30.0)
             conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA query_only=ON")
             return conn
         except Exception as e:
             log.error(f"Cannot open {label} database: {e}")
             return None
+
+    def _connection(self, label: str, path: Path) -> Optional[sqlite3.Connection]:
+        """Return a SQLite connection owned by the current parser worker."""
+        thread_id = threading.get_ident()
+        with self._connection_lock:
+            thread_map = self._thread_connections.setdefault(thread_id, {})
+            if label in thread_map:
+                return thread_map[label]
+            conn = self._open(path, label.upper())
+            if conn is not None:
+                thread_map[label] = conn
+            return conn
 
     def resolve(
         self,
@@ -194,33 +212,37 @@ class ReferenceDB:
         Uses MMSI as primary key; falls back to IMO, callsign, name.
         """
         key = self._resolve_cache_key(mmsi, imo, callsign, vessel_name)
-        with self._lock:
+        with self._cache_lock:
             cached = self._resolve_cache.get(key)
             if cached is not None:
                 self._resolve_cache.move_to_end(key)
                 return copy.deepcopy(cached)
 
-            ctx = VesselContext()
-            self._resolve_wrs(ctx, mmsi, imo, callsign, vessel_name)
-            self._resolve_pans(ctx, mmsi, imo, callsign, vessel_name)
-            self._resolve_nsc(ctx, mmsi, imo, callsign, vessel_name)
+        # Do not hold a process-wide lock while querying WRS/PANS/NSC. Each
+        # worker has independent read-only SQLite connections, so enrichment
+        # can proceed concurrently.
+        ctx = VesselContext()
+        self._resolve_wrs(ctx, mmsi, imo, callsign, vessel_name)
+        self._resolve_pans(ctx, mmsi, imo, callsign, vessel_name)
+        self._resolve_nsc(ctx, mmsi, imo, callsign, vessel_name)
 
-            # Record the first direct MMSI match using the agreed source
-            # check order. Field-level enrichment separately evaluates
-            # PANS -> NSC -> WRS based on which data is actually available.
-            if mmsi is not None:
-                if ctx.pans_matched and ctx.pans_match_method == "MMSI":
-                    ctx.primary_mmsi_source = "PANS"
-                elif ctx.nsc_matched and ctx.nsc_match_method == "MMSI":
-                    ctx.primary_mmsi_source = "NSC"
-                elif ctx.wrs_matched and ctx.wrs_match_method == "MMSI":
-                    ctx.primary_mmsi_source = "WRS"
+        # Record the first direct MMSI match using the agreed source
+        # check order. Field-level enrichment separately evaluates
+        # PANS -> NSC -> WRS based on which data is actually available.
+        if mmsi is not None:
+            if ctx.pans_matched and ctx.pans_match_method == "MMSI":
+                ctx.primary_mmsi_source = "PANS"
+            elif ctx.nsc_matched and ctx.nsc_match_method == "MMSI":
+                ctx.primary_mmsi_source = "NSC"
+            elif ctx.wrs_matched and ctx.wrs_match_method == "MMSI":
+                ctx.primary_mmsi_source = "WRS"
 
+        with self._cache_lock:
             self._resolve_cache[key] = copy.deepcopy(ctx)
             self._resolve_cache.move_to_end(key)
             while len(self._resolve_cache) > self._resolve_cache_max:
                 self._resolve_cache.popitem(last=False)
-            return ctx
+        return ctx
 
     @staticmethod
     def _resolve_cache_key(
@@ -253,9 +275,10 @@ class ReferenceDB:
         callsign: Optional[str] = None,
         vessel_name: Optional[str] = None,
     ):
-        if not self._wrs_conn:
+        conn = self._connection("wrs", self._wrs_path)
+        if not conn:
             return
-        c = self._wrs_conn.cursor()
+        c = conn.cursor()
 
         # 1. Find vessel record by MMSI -> IMO -> CALL_SIGN -> VESSEL_NAME
         row = None
@@ -458,9 +481,10 @@ class ReferenceDB:
         callsign: Optional[str] = None,
         vessel_name: Optional[str] = None,
     ):
-        if not self._pans_conn:
+        conn = self._connection("pans", self._pans_path)
+        if not conn:
             return
-        c = self._pans_conn.cursor()
+        c = conn.cursor()
 
         # VESPRO — match on IMONumber -> MMSINumber -> CallSign -> VesselName
         row = None
@@ -602,9 +626,10 @@ class ReferenceDB:
         callsign: Optional[str] = None,
         vessel_name: Optional[str] = None,
     ):
-        if not self._nsc_conn:
+        conn = self._connection("nsc", self._nsc_path)
+        if not conn:
             return
-        c = self._nsc_conn.cursor()
+        c = conn.cursor()
 
         row = None
         match_method = None
@@ -665,12 +690,18 @@ class ReferenceDB:
             ctx.record_provenance("vessel.description", ctx.nsc_type, "NSC", match_method)
 
     def close(self):
-        for conn in (self._wrs_conn, self._pans_conn, self._nsc_conn):
-            if conn:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
+        with self._connection_lock:
+            connections = [
+                conn
+                for thread_map in self._thread_connections.values()
+                for conn in thread_map.values()
+            ]
+            self._thread_connections.clear()
+        for conn in connections:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

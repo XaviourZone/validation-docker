@@ -49,7 +49,16 @@
               <div class="form-group"><label class="form-label">SSH Password</label><input id="fw-password" type="password" class="form-input" autocomplete="new-password" placeholder="Enter when not configured"><div id="fw-password-hint" class="form-hint"></div></div>
               <div class="form-group"><label class="form-label">Private Key File (optional)</label><input id="fw-key" class="form-input" placeholder="Leave empty for password authentication"></div>
             </div>
-            <div class="form-group"><label class="form-label" id="fw-path-label">Remote Folder *</label><input id="fw-path" class="form-input" placeholder="/home/ddiode/txserver/in/"></div>
+            <div class="form-group">
+              <label class="form-label" id="fw-path-label">Remote Folder *</label>
+              <div style="display:flex;gap:8px;">
+                <input id="fw-path" class="form-input" style="flex:1" placeholder="/home/ddiode/txserver/in/">
+                <button type="button" class="btn btn-secondary" id="fw-browse-folder"
+                  data-folder-browser-target="fw-path"
+                  data-folder-browser-api="/api/router/filesystem/browse"
+                  data-folder-browser-title="Select Local Destination Folder">Browse…</button>
+              </div>
+            </div>
             <div class="form-row"><div class="form-group"><label class="form-label">Connection Timeout</label><input id="fw-timeout" type="number" class="form-input" value="10" min="1"></div><div class="form-group" style="display:flex;align-items:center;padding-top:24px;"><label style="display:flex;align-items:center;gap:8px;font-size:13px;"><input type="checkbox" id="fw-enabled"> Enable</label></div></div>
             <div id="fw-form-error" style="display:none;margin-top:12px;"></div>
           </div>
@@ -101,6 +110,7 @@
     const sftp=document.getElementById("fw-sftp-fields");
     const label=document.getElementById("fw-path-label");
     const path=document.getElementById("fw-path");
+    const browse=document.getElementById("fw-browse-folder");
     const port=document.getElementById("fw-port");
     const user=document.getElementById("fw-user");
     const pass=document.getElementById("fw-password");
@@ -109,6 +119,7 @@
     const isFile=type==="filesystem";
     sftp.style.display=isFile?"none":"block";
     label.textContent=isFile?"Local Folder *":"Remote Folder *";
+    if (browse) browse.style.display=isFile?"inline-flex":"none";
     path.placeholder=isFile?"C:\\Validation\\XML\\out":"/home/ddiode/txserver/in/";
     port.value=isFile?1:(Number(port.value)||22);
     user.disabled=isFile; pass.disabled=isFile; key.disabled=isFile;

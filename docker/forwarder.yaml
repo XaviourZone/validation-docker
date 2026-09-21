@@ -7,7 +7,7 @@ spool:
   failed_dir: "Validation/Data_Forwarder/spool/failed"
   state_db: "Validation/Data_Forwarder/state/forwarder.db"
   secret_file: "Validation/Data_Forwarder/state/forwarder_secrets.json"
-  poll_interval_seconds: 1
+  poll_interval_seconds: 0.1
   claim_timeout_seconds: 300
 retry:
   max_attempts: 5

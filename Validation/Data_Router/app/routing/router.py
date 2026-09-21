@@ -197,7 +197,7 @@ class RoutingEngine:
                 self.logger.info("Source file finalized after parser send: %s -> %s", source_path, target)
             else:
                 source_path.unlink()
-                self.logger.info("Source file deleted after parser ACK: %s", source_path)
+                self.logger.info("Source file deleted after parser send: %s", source_path)
         except Exception as exc:
             self.logger.error("Parser send succeeded but source file could not be finalized: %s: %s", source_path, exc)
 

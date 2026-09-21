@@ -19,7 +19,7 @@
 
     return new Promise(resolve => {
       const script = document.createElement("script");
-      script.src = url + "?v=20260920-r5";
+      script.src = url + "?v=20260921-r6";
       script.async = false;
       script.dataset.validationExtension = key;
       script.onload = () => {

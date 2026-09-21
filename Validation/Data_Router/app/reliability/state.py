@@ -237,7 +237,7 @@ class FileStateStore:
         with self._lock:
             conn = self._get_connection()
             try:
-                if status in (FileState.ACKNOWLEDGED, FileState.PROCESSED):
+                if status in (FileState.SENT, FileState.PROCESSED):
                     conn.execute(
                         """
                         UPDATE file_states

@@ -1,19 +1,22 @@
-"""TCP NDJSON Endpoint Listener for Data Parser service."""
+"""TCP NDJSON endpoint for high-throughput asynchronous parser ingress."""
 
 import json
 import logging
+import os
 import socket
 import threading
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Optional
 
 from ..metrics.collector import ParserMetricsCollector
-from ..models.common import ParserEnvelope, ParseResult
+from ..models.common import ParserEnvelope
 from ..parsers.base import BaseParser
 from ..pipeline.processor import PipelineProcessor
+from .ingress_queue import DurableIngressQueue
 
 
 class ParserEndpointServer:
-    """Listens on a designated TCP port and processes routed envelopes."""
+    """Accepts envelopes from Router and never waits for parse completion."""
 
     def __init__(
         self,
@@ -35,12 +38,26 @@ class ParserEndpointServer:
         self.logger = logger or logging.getLogger("parser")
         self.processor = processor or PipelineProcessor()
 
+        ingress_root = Path(
+            os.environ.get(
+                "VALIDATION_PARSER_INGRESS_DIR",
+                str(Path.cwd() / "Validation" / "state" / "parser-ingress"),
+            )
+        )
+        self.ingress_queue = DurableIngressQueue(
+            root_dir=ingress_root,
+            endpoint_name=name,
+            processor=self.processor,
+            parser=self.parser,
+            metrics_collector=self.metrics_collector,
+            logger=self.logger,
+        )
+
         self._server_sock: Optional[socket.socket] = None
         self._running = False
         self._thread: Optional[threading.Thread] = None
 
     def start(self):
-        """Bind and begin listening on the TCP port."""
         self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._server_sock.bind((self.host, self.port))
@@ -48,13 +65,23 @@ class ParserEndpointServer:
         self._server_sock.settimeout(1.0)
         self._running = True
 
-        self._thread = threading.Thread(target=self._listen_loop, daemon=True, name=f"Parser-{self.name}")
+        self._thread = threading.Thread(
+            target=self._listen_loop,
+            daemon=True,
+            name=f"Parser-{self.name}",
+        )
         self._thread.start()
-        self.logger.info(f"Parser endpoint '{self.name}' listening on {self.host}:{self.port}")
+        self.ingress_queue.start()
+        self.logger.info(
+            "Parser endpoint '%s' listening on %s:%s (no application ACK)",
+            self.name,
+            self.host,
+            self.port,
+        )
 
     def stop(self):
-        """Shut down the endpoint listener."""
         self._running = False
+        self.ingress_queue.stop()
         if self._server_sock:
             try:
                 self._server_sock.close()
@@ -63,86 +90,90 @@ class ParserEndpointServer:
             self._server_sock = None
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2.0)
-        self.logger.info(f"Parser endpoint '{self.name}' stopped.")
+        self.logger.info("Parser endpoint '%s' stopped.", self.name)
 
     def _listen_loop(self):
         while self._running:
             try:
                 client_sock, client_addr = self._server_sock.accept()
                 client_thread = threading.Thread(
-                    target=self._handle_client, args=(client_sock, client_addr), daemon=True
+                    target=self._handle_client,
+                    args=(client_sock, client_addr),
+                    daemon=True,
+                    name=f"ParserClient-{self.name}",
                 )
                 client_thread.start()
             except socket.timeout:
                 continue
             except OSError:
                 break
-            except Exception as e:
+            except Exception as exc:
                 if self._running:
-                    self.logger.error(f"Error accepting connection on {self.name}: {e}")
+                    self.logger.error(
+                        "Error accepting connection on %s: %s", self.name, exc
+                    )
 
     def _handle_client(self, client_sock: socket.socket, client_addr):
         client_sock.settimeout(10.0)
-        buffer = b""
+        buffer = bytearray()
         try:
             while self._running:
                 chunk = client_sock.recv(65536)
                 if not chunk:
                     break
-                buffer += chunk
+                buffer.extend(chunk)
 
                 while b"\n" in buffer:
-                    line, buffer = buffer.split(b"\n", 1)
+                    line, remainder = buffer.split(b"\n", 1)
+                    buffer = bytearray(remainder)
                     line = line.strip()
                     if not line:
                         continue
 
-                    ack_payload = self._process_envelope_line(line)
-                    ack_bytes = json.dumps(ack_payload).encode("utf-8") + b"\n"
-                    client_sock.sendall(ack_bytes)
-
+                    # Only persist the envelope. Parsing/enrichment/XML happens
+                    # on the background worker and never blocks socket receive.
+                    self._process_envelope_line(bytes(line))
         except (ConnectionResetError, BrokenPipeError, socket.timeout):
             pass
-        except Exception as e:
-            self.logger.error(f"Error handling client {client_addr} on {self.name}: {e}")
+        except Exception as exc:
+            self.logger.error(
+                "Error handling parser client %s on %s: %s",
+                client_addr,
+                self.name,
+                exc,
+            )
         finally:
             try:
                 client_sock.close()
             except Exception:
                 pass
 
-    def _process_envelope_line(self, line: bytes) -> dict:
+    def _process_envelope_line(self, line: bytes) -> bool:
         try:
             data = json.loads(line.decode("utf-8"))
             envelope = ParserEnvelope.from_dict(data)
-        except Exception as e:
-            self.logger.error(f"Failed to deserialize envelope on {self.name}: {e}")
-            return {
-                "status": "NACK",
-                "message_id": "unknown",
-                "parser": self.name,
-                "error": f"Invalid envelope JSON: {str(e)}",
-            }
+        except Exception as exc:
+            self.logger.error(
+                "Dropped invalid envelope on %s: %s", self.name, exc
+            )
+            return False
 
-        # Parse using pipeline processor
         try:
-            result, generated_xml = self.processor.process_envelope(
-                envelope=envelope,
-                fallback_source_parser=self.parser,
+            accepted = self.ingress_queue.enqueue(envelope)
+            if not accepted:
+                self.logger.error(
+                    "Parser ingress persistence failed source=%s file=%s message_id=%s",
+                    envelope.source,
+                    envelope.filename,
+                    envelope.message_id,
+                )
+                return False
+            return True
+        except Exception as exc:
+            self.logger.exception(
+                "Unhandled parser ingress error on %s for %s: %s",
+                self.name,
+                envelope.message_id,
+                exc,
             )
-            self.metrics_collector.record_parse_result(
-                source=envelope.source,
-                records_parsed=result.records_parsed,
-                records_rejected=result.records_rejected,
-                errors=result.errors,
-            )
-            return result.to_ack_dict(self.name)
-        except Exception as e:
-            self.logger.error(f"Unhandled error in parser {self.name} for {envelope.message_id}: {e}")
-            return {
-                "status": "NACK",
-                "message_id": envelope.message_id,
-                "parser": self.name,
-                "source": envelope.source,
-                "error": f"Parser execution failure: {str(e)}",
-            }
+            return False

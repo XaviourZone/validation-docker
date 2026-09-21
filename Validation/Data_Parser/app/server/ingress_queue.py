@@ -33,6 +33,9 @@ class DurableIngressQueue:
         metrics_collector: Any,
         logger: Optional[logging.Logger] = None,
         poll_interval: float = 0.25,
+        max_processing_attempts: int = 5,
+        initial_retry_delay: float = 2.0,
+        max_retry_delay: float = 60.0,
     ):
         self.root_dir = Path(root_dir) / self._safe_name(endpoint_name)
         self.pending_dir = self.root_dir / "pending"
@@ -47,6 +50,9 @@ class DurableIngressQueue:
         self.metrics_collector = metrics_collector
         self.logger = logger or logging.getLogger("parser.ingress")
         self.poll_interval = max(0.05, float(poll_interval))
+        self.max_processing_attempts = max(1, int(max_processing_attempts))
+        self.initial_retry_delay = max(0.1, float(initial_retry_delay))
+        self.max_retry_delay = max(self.initial_retry_delay, float(max_retry_delay))
 
         self._running = False
         self._stop_event = threading.Event()
@@ -172,10 +178,29 @@ class DurableIngressQueue:
             files = sorted(self.pending_dir.glob("*.json"))
             if not files:
                 return False
-            path = files[0]
+
+            now = time.time()
+            path = None
+            data = None
+            for candidate in files:
+                try:
+                    if candidate.stat().st_mtime > now:
+                        continue
+                    candidate_data = json.loads(candidate.read_text(encoding="utf-8"))
+                    path = candidate
+                    data = candidate_data
+                    break
+                except Exception:
+                    path = candidate
+                    data = None
+                    break
+
+            if path is None:
+                return False
 
             try:
-                data = json.loads(path.read_text(encoding="utf-8"))
+                if data is None:
+                    data = json.loads(path.read_text(encoding="utf-8"))
                 envelope = ParserEnvelope.from_dict(data)
             except Exception as exc:
                 self.logger.error(
@@ -185,6 +210,7 @@ class DurableIngressQueue:
                 return True
 
         started = time.monotonic()
+        attempt = int(data.get("processing_attempts", 0)) + 1
         try:
             result, _generated_xml = self.processor.process_envelope(
                 envelope=envelope,
@@ -211,17 +237,11 @@ class DurableIngressQueue:
                     time.monotonic() - started,
                 )
             else:
-                self._move_to_failed(
+                self._handle_processing_failure(
                     path,
-                    reason="; ".join(result.errors[:10]) or "parser returned unsuccessful result",
-                )
-                self.logger.error(
-                    "Parser processing failed source=%s file=%s message_id=%s "
-                    "elapsed=%.2fs",
-                    envelope.source,
-                    envelope.filename,
-                    envelope.message_id,
-                    time.monotonic() - started,
+                    data,
+                    attempt,
+                    "; ".join(result.errors[:10]) or "parser returned unsuccessful result",
                 )
         except Exception as exc:
             self.logger.exception(
@@ -230,9 +250,57 @@ class DurableIngressQueue:
                 envelope.filename,
                 envelope.message_id,
             )
-            self._move_to_failed(path, reason=str(exc))
+            self._handle_processing_failure(path, data, attempt, str(exc))
 
         return True
+
+    def _handle_processing_failure(
+        self,
+        path: Path,
+        data: dict,
+        attempt: int,
+        reason: str,
+    ) -> None:
+        data["processing_attempts"] = attempt
+        data["last_failure_reason"] = reason
+        data["last_failed_at"] = time.time()
+
+        if attempt >= self.max_processing_attempts:
+            self._move_to_failed(path, reason=reason)
+            self.logger.error(
+                "Parser ingress permanently failed message_id=%s after %d attempts: %s",
+                data.get("message_id"),
+                attempt,
+                reason,
+            )
+            return
+
+        delay = min(
+            self.max_retry_delay,
+            self.initial_retry_delay * (2 ** max(0, attempt - 1)),
+        )
+        temp = path.with_name(path.name + ".part")
+        try:
+            temp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            os.replace(temp, path)
+            retry_at = time.time() + delay
+            os.utime(path, (retry_at, retry_at))
+            self.logger.warning(
+                "Parser ingress processing retry scheduled message_id=%s "
+                "attempt=%d/%d delay=%.1fs",
+                data.get("message_id"),
+                attempt,
+                self.max_processing_attempts,
+                delay,
+            )
+        except Exception as exc:
+            self.logger.error(
+                "Could not persist parser retry state %s: %s", path, exc
+            )
+            try:
+                temp.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _move_to_done(self, path: Path) -> None:
         target = self.done_dir / path.name

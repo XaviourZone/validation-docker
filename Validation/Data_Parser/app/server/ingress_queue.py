@@ -202,13 +202,14 @@ class DurableIngressQueue:
                 self._move_to_done(path)
                 self.logger.info(
                     "Parser processing complete source=%s file=%s message_id=%s "
-                    "records=%d rejected=%d elapsed=%.2fs",
+                    "records=%d rejected=%d elapsed=%.2fs rate=%.1f records/s",
                     envelope.source,
                     envelope.filename,
                     envelope.message_id,
                     result.records_parsed,
                     result.records_rejected,
                     time.monotonic() - started,
+                    result.records_parsed / max(time.monotonic() - started, 0.001),
                 )
             else:
                 self._handle_processing_failure(

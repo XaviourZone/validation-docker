@@ -12,8 +12,6 @@ import socket
 import subprocess
 import sys
 import tempfile
-import threading
-import time
 import unittest
 from pathlib import Path
 
@@ -156,7 +154,6 @@ class ForwarderDummySFTPTest(unittest.TestCase):
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            self.addCleanup(lambda: server.terminate())
             line = server.stdout.readline().strip()
             self.assertTrue(line.startswith("READY "), f"dummy SFTP did not start: {line!r}")
 

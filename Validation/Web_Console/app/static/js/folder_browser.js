@@ -106,9 +106,18 @@
     });
   }
 
-  document.querySelectorAll("[data-folder-browser-target]").forEach((button) => {
-    button.addEventListener("click", () => openModal(button));
+  // Event delegation also supports dynamically-created operator panels.
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-folder-browser-target]");
+    if (button) {
+      event.preventDefault();
+      openModal(button);
+    }
   });
+
+  window.ValidationFolderBrowser = {
+    open: openModal,
+  };
 
   if (parentBtn) parentBtn.addEventListener("click", () => {
     if (!currentPath) return;

@@ -164,8 +164,8 @@ class RoutingEngine:
         self.connection_manager.disconnect_all()
         self.logger.info("RoutingEngine stopped gracefully")
 
-    def _finalize_file_after_ack(self, item: QueueItem) -> None:
-        """Remove or archive the original file only after parser ACK succeeds."""
+    def _finalize_file_after_send(self, item: QueueItem) -> None:
+        """Remove or archive the original file after the complete envelope is sent."""
         source_cfg = self.config.sources.get(item.envelope.source)
         if not isinstance(source_cfg, FileSourceConfig) or source_cfg.preserve_file:
             return
@@ -180,7 +180,7 @@ class RoutingEngine:
 
         source_path = Path(state.file_path)
         if not source_path.exists():
-            self.logger.warning("Source file already absent after ACK: %s", source_path)
+            self.logger.warning("Source file already absent after send: %s", source_path)
             return
 
         try:
@@ -194,12 +194,12 @@ class RoutingEngine:
                 if target.exists():
                     target = target_dir / f"{source_path.stem}_{state.file_hash[:12]}{source_path.suffix}"
                 shutil.move(str(source_path), str(target))
-                self.logger.info("Source file finalized after parser ACK: %s -> %s", source_path, target)
+                self.logger.info("Source file finalized after parser send: %s -> %s", source_path, target)
             else:
                 source_path.unlink()
-                self.logger.info("Source file deleted after parser ACK: %s", source_path)
+                self.logger.info("Source file deleted after parser send: %s", source_path)
         except Exception as exc:
-            self.logger.error("Parser ACK succeeded but source file could not be finalized: %s: %s", source_path, exc)
+            self.logger.error("Parser send succeeded but source file could not be finalized: %s: %s", source_path, exc)
 
     def _delivery_worker_loop(self) -> None:
         """Worker thread loop consuming queue and dispatching to parsers."""
@@ -216,7 +216,7 @@ class RoutingEngine:
                 self.queue_manager.task_done()
 
     def _process_delivery(self, item: QueueItem) -> None:
-        """Execute a delivery attempt with ACK validation and retry handling."""
+        """Execute a delivery attempt; success means TCP send completed, not parser processing."""
         source = item.envelope.source
         filename = item.envelope.filename
         msg_id = item.envelope.message_id
@@ -236,13 +236,13 @@ class RoutingEngine:
             attempt=item.attempt_count + 1,
         )
 
-        ack_result = self.connection_manager.deliver(item)
+        send_result = self.connection_manager.deliver(item)
 
-        if ack_result.success:
+        if send_result.success:
             if self.state_store and item.envelope.input_type == "FILE":
-                self.state_store.update_status(msg_id, FileState.ACKNOWLEDGED)
+                self.state_store.update_status(msg_id, FileState.SENT)
                 self.state_store.update_status(msg_id, FileState.PROCESSED)
-                self._finalize_file_after_ack(item)
+                self._finalize_file_after_send(item)
 
             if self.metrics_collector:
                 self.metrics_collector.record_acknowledged(source)
@@ -250,7 +250,7 @@ class RoutingEngine:
             log_event(
                 self.logger,
                 logging.INFO,
-                event="acknowledged",
+                event="sent",
                 source=source,
                 filename=filename,
                 message_id=msg_id,
@@ -260,12 +260,12 @@ class RoutingEngine:
         else:
             item.attempt_count += 1
             if self.state_store and item.envelope.input_type == "FILE":
-                self.state_store.increment_attempt(msg_id, error=ack_result.error)
+                self.state_store.increment_attempt(msg_id, error=send_result.error)
 
             if self.retry_policy.can_retry(item.attempt_count):
                 delay = self.retry_policy.get_delay(item.attempt_count)
                 if self.state_store and item.envelope.input_type == "FILE":
-                    self.state_store.update_status(msg_id, FileState.RETRYING, error=ack_result.error)
+                    self.state_store.update_status(msg_id, FileState.RETRYING, error=send_result.error)
 
                 if self.metrics_collector:
                     self.metrics_collector.record_retry(source)
@@ -280,13 +280,13 @@ class RoutingEngine:
                     destination=dest_addr,
                     attempt=item.attempt_count,
                     delay_seconds=round(delay, 2),
-                    error=ack_result.error,
+                    error=send_result.error,
                 )
                 self.queue_manager.requeue_for_retry(item, delay)
 
             else:
                 if self.state_store and item.envelope.input_type == "FILE":
-                    self.state_store.update_status(msg_id, FileState.FAILED, error=ack_result.error)
+                    self.state_store.update_status(msg_id, FileState.FAILED, error=send_result.error)
 
                 if self.metrics_collector:
                     self.metrics_collector.record_failed(source)
@@ -300,5 +300,5 @@ class RoutingEngine:
                     message_id=msg_id,
                     destination=dest_addr,
                     attempts=item.attempt_count,
-                    error=ack_result.error,
+                    error=send_result.error,
                 )

@@ -13,6 +13,8 @@ services:
       - ./runtime/parser-logs:/opt/validation/Validation/Data_Parser/logs
       - ./runtime/parser-state:/opt/validation/Validation/state
       - ./runtime/reference:/opt/validation/runtime/reference
+    environment:
+      VALIDATION_PARSER_INGRESS_DIR: /opt/validation/Validation/state/parser-ingress
     ports:
       - "10001:10001"
       - "10002:10002"
@@ -54,6 +56,9 @@ services:
       - ./docker:/opt/validation/docker
       - ./runtime/spool:/opt/validation/Validation/Data_Forwarder/spool
       - ./runtime/forwarder-state:/opt/validation/Validation/Data_Forwarder/state
+      - /:/opt/validation/hostfs:rw
+    environment:
+      VALIDATION_HOST_FILESYSTEM_ROOT: /opt/validation/hostfs
     ports:
       - "8082:8082"
 
@@ -85,7 +90,6 @@ services:
       - ${VALIDATION_OPERATOR_DATA_ROOT:-./runtime/reference}:/opt/validation/operator-data
     environment:
       VALIDATION_HOST_FILESYSTEM_ROOT: /opt/validation/hostfs
-
       VALIDATION_DATABASE_CONFIG: /opt/validation/docker/database.yaml
       VALIDATION_DATABASE_BROWSE_ROOT: /opt/validation/operator-data
     ports:

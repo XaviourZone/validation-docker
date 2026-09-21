@@ -15,7 +15,7 @@ services:
       - ./runtime/reference:/opt/validation/runtime/reference
     environment:
       VALIDATION_PARSER_INGRESS_DIR: /opt/validation/Validation/state/parser-ingress
-      VALIDATION_PARSER_RECORD_WORKERS: 8
+      VALIDATION_PARSER_RECORD_WORKERS: 16
     ports:
       - "10001:10001"
       - "10002:10002"

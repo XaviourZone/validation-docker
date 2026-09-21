@@ -2,14 +2,17 @@
 
 import json
 import logging
+import os
 import socket
 import threading
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from ..metrics.collector import ParserMetricsCollector
 from ..models.common import ParserEnvelope, ParseResult
 from ..parsers.base import BaseParser
 from ..pipeline.processor import PipelineProcessor
+from .ingress_queue import DurableIngressQueue
 
 
 class ParserEndpointServer:
@@ -35,6 +38,21 @@ class ParserEndpointServer:
         self.logger = logger or logging.getLogger("parser")
         self.processor = processor or PipelineProcessor()
 
+        ingress_root = Path(
+            os.environ.get(
+                "VALIDATION_PARSER_INGRESS_DIR",
+                str(Path.cwd() / "Validation" / "state" / "parser-ingress"),
+            )
+        )
+        self.ingress_queue = DurableIngressQueue(
+            root_dir=ingress_root,
+            endpoint_name=name,
+            processor=self.processor,
+            parser=self.parser,
+            metrics_collector=self.metrics_collector,
+            logger=self.logger,
+        )
+
         self._server_sock: Optional[socket.socket] = None
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -50,11 +68,13 @@ class ParserEndpointServer:
 
         self._thread = threading.Thread(target=self._listen_loop, daemon=True, name=f"Parser-{self.name}")
         self._thread.start()
+        self.ingress_queue.start()
         self.logger.info(f"Parser endpoint '{self.name}' listening on {self.host}:{self.port}")
 
     def stop(self):
         """Shut down the endpoint listener."""
         self._running = False
+        self.ingress_queue.stop()
         if self._server_sock:
             try:
                 self._server_sock.close()
@@ -124,25 +144,36 @@ class ParserEndpointServer:
                 "error": f"Invalid envelope JSON: {str(e)}",
             }
 
-        # Parse using pipeline processor
+        # ACK is returned after the complete envelope has been atomically
+        # persisted to the durable parser ingress queue. The parse/normalize/
+        # enrich/XML work runs in the background worker. This prevents large
+        # MSIS/LRIT/SAIS files from exceeding the Router ACK timeout and
+        # prevents a timeout from causing duplicate processing.
         try:
-            result, generated_xml = self.processor.process_envelope(
-                envelope=envelope,
-                fallback_source_parser=self.parser,
-            )
-            self.metrics_collector.record_parse_result(
-                source=envelope.source,
-                records_parsed=result.records_parsed,
-                records_rejected=result.records_rejected,
-                errors=result.errors,
-            )
-            return result.to_ack_dict(self.name)
+            accepted = self.ingress_queue.enqueue(envelope)
+            if not accepted:
+                return {
+                    "status": "NACK",
+                    "message_id": envelope.message_id,
+                    "parser": self.name,
+                    "source": envelope.source,
+                    "error": "Parser durable ingress queue rejected the envelope",
+                }
+            return {
+                "status": "ACK",
+                "message_id": envelope.message_id,
+                "parser": self.name,
+                "source": envelope.source,
+                "accepted": True,
+            }
         except Exception as e:
-            self.logger.error(f"Unhandled error in parser {self.name} for {envelope.message_id}: {e}")
+            self.logger.exception(
+                f"Unhandled parser ingress error on {self.name} for {envelope.message_id}: {e}"
+            )
             return {
                 "status": "NACK",
                 "message_id": envelope.message_id,
                 "parser": self.name,
                 "source": envelope.source,
-                "error": f"Parser execution failure: {str(e)}",
+                "error": f"Parser ingress failure: {str(e)}",
             }

@@ -55,6 +55,18 @@ def _path(root: Path, value: str) -> Path:
     return p if p.is_absolute() else root / p
 
 
+def _filesystem_destination_path(root: Path, value: str) -> Path:
+    """Resolve a host-selected local destination inside the Forwarder container."""
+    p = Path(os.path.expandvars(value)).expanduser()
+    if not p.is_absolute():
+        return root / p
+
+    host_root = os.environ.get("VALIDATION_HOST_FILESYSTEM_ROOT", "").strip()
+    if host_root:
+        return Path(host_root) / str(p).lstrip("/\\")
+    return p
+
+
 def load_config(path: Path, root: Path) -> ForwarderConfig:
     with path.open("r", encoding="utf-8") as fh:
         raw = yaml.safe_load(fh) or {}
@@ -82,13 +94,17 @@ def load_config(path: Path, root: Path) -> ForwarderConfig:
     destinations = {}
     for name, value in (raw.get("destinations", {}) or {}).items():
         value = value or {}
+        protocol = str(value.get("protocol", "filesystem")).lower()
+        remote_path = str(value.get("remote_path", ""))
+        if protocol == "filesystem":
+            remote_path = str(_filesystem_destination_path(root, remote_path))
         destinations[name] = DestinationConfig(
             name=name,
             enabled=bool(value.get("enabled", False)),
-            protocol=str(value.get("protocol", "filesystem")).lower(),
+            protocol=protocol,
             host=str(value.get("host", "")),
             port=int(value.get("port", 0)),
-            remote_path=str(value.get("remote_path", "")),
+            remote_path=remote_path,
             username=str(value.get("username", "")),
             private_key_file=str(value.get("private_key_file", "")),
             password_file=secret_file,

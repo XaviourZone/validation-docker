@@ -17,7 +17,7 @@ class FileState(str, Enum):
     READY = "READY"
     QUEUED = "QUEUED"
     SENDING = "SENDING"
-    ACKNOWLEDGED = "ACKNOWLEDGED"
+    SENT = "SENT"
     PROCESSED = "PROCESSED"
     RETRYING = "RETRYING"
     FAILED = "FAILED"
@@ -108,7 +108,7 @@ class FileStateStore:
                 row = cursor.fetchone()
                 if not row:
                     return False
-                return row["status"] in (FileState.PROCESSED.value, FileState.ACKNOWLEDGED.value)
+                return row["status"] in (FileState.SENT.value, FileState.PROCESSED.value)
             finally:
                 conn.close()
 
@@ -131,7 +131,7 @@ class FileStateStore:
                     FileState.READY.value,
                     FileState.QUEUED.value,
                     FileState.SENDING.value,
-                    FileState.ACKNOWLEDGED.value,
+                    FileState.SENT.value,
                     FileState.PROCESSED.value,
                     FileState.RETRYING.value,
                     FileState.FAILED.value,
@@ -237,7 +237,7 @@ class FileStateStore:
         with self._lock:
             conn = self._get_connection()
             try:
-                if status in (FileState.ACKNOWLEDGED, FileState.PROCESSED):
+                if status in (FileState.SENT, FileState.PROCESSED):
                     conn.execute(
                         """
                         UPDATE file_states

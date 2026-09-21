@@ -61,8 +61,8 @@ class TestSemanticAudit(unittest.TestCase):
                 )
                 conn.execute(
                     "INSERT INTO nsc_vessels "
-                    "(ID_MMSI, ID_IMO, ID_CALLSIGN, VESSEL_NAME, TYPE) "
-                    "VALUES (?, ?, ?, ?, ?)",
+                    "(SOURCE_REGION, ID_MMSI, ID_IMO, ID_CALLSIGN, VESSEL_NAME, TYPE, BEGIN_DATE, END_DATE) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     ("EAST", "419697000", "8407979", "SAGA", "SAGA", "VESSEL", "", ""),
                 )
                 conn.commit()

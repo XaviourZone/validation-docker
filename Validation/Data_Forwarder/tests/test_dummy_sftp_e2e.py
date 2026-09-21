@@ -236,7 +236,12 @@ class ForwarderDummySFTPTest(unittest.TestCase):
                 service.process_once()
             finally:
                 service.running = False
-                service.stop()
+                server.terminate()
+                try:
+                    server.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    server.kill()
+                    server.wait(timeout=5)
 
             remote_file = remote / source.name
             remote_part = remote / (source.name + ".part")
@@ -254,7 +259,6 @@ class ForwarderDummySFTPTest(unittest.TestCase):
             self.assertEqual(state["state"], "DELIVERED")
             self.assertEqual(state["attempts"], 1)
             self.assertEqual(service.metrics()["states"]["DELIVERED"], 1)
-            service.state.close()
 
             print("PASS: Forwarder -> dummy SSH/SFTP -> remote folder")
             print(f"PASS: dummy SFTP port {port}")

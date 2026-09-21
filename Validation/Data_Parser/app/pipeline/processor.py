@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -39,6 +40,8 @@ class PipelineProcessor:
         self.spoofing = PositionalSpoofingDetector()
         self.xml_generator = XTrackXMLGenerator()
         self.downstream_parser = DownstreamXMLParser()
+        self.record_workers = max(1, int(os.environ.get("VALIDATION_PARSER_RECORD_WORKERS", "8")))
+        self._record_executor = ThreadPoolExecutor(max_workers=self.record_workers, thread_name_prefix="ParserRecord")
 
         if xml_output_dir:
             configured = Path(xml_output_dir)
@@ -92,7 +95,7 @@ class PipelineProcessor:
         temp = target.with_name(target.name + ".part")
         temp.write_text(xml, encoding="utf-8")
         temp.replace(target)
-        log.info("Final XML spooled: %s", target)
+        log.debug("Final XML spooled: %s", target)
         return target
 
     def process_envelope(
@@ -143,58 +146,59 @@ class PipelineProcessor:
                 except Exception as exc:
                     errors.append(f"Source parser error: {exc}")
 
-        enriched: List[NormalizedRecord] = []
-        common_records: List[CommonVesselRecord] = []
-        for norm in normalized_records:
-            try:
-                enr = self._enrich_one(norm)
-                enriched.append(enr)
-                common_records.append(
-                    CommonVesselRecord(
-                        source=source,
-                        message_id=message_id,
-                        record_id=f"{source}:{message_id}:{enr.id_mmsi or 'unknown'}",
-                        timestamp=str(enr.timestamp_source or ""),
-                        mmsi=enr.id_mmsi,
-                        imo=enr.id_imo,
-                        vessel_name=enr.vessel_name,
-                        callsign=enr.id_callsign,
-                        latitude=enr.kinematic_pos_lla_lat,
-                        longitude=enr.kinematic_pos_lla_lon,
-                        sog=enr.kinematic_speed,
-                        cog=enr.kinematic_course_true,
-                        true_heading=enr.kinematic_heading_true,
-                        nav_status=enr.ais_navStatus if isinstance(enr.ais_navStatus, int) else None,
-                        draught=enr.vessel_draft,
-                        vessel_type=str(enr.ais_typeAndCargo or ""),
-                        destination=enr.voyage_destination,
-                        eta=str(enr.voyage_eta or ""),
-                        length=enr.vessel_length,
-                        width=enr.vessel_beam,
-                        raw_payload=enr.raw_attributes.get("raw_payload"),
-                        raw_attributes=dict(enr.raw_attributes or {}),
-                    )
-                )
-            except Exception as exc:
-                errors.append(f"Enrichment error for MMSI={norm.id_mmsi}: {exc}")
+        def materialize(index_and_norm):
+            index, norm = index_and_norm
+            enr = self._enrich_one(norm)
+            common = CommonVesselRecord(
+                source=source,
+                message_id=message_id,
+                record_id=f"{source}:{message_id}:{enr.id_mmsi or 'unknown'}",
+                timestamp=str(enr.timestamp_source or ""),
+                mmsi=enr.id_mmsi,
+                imo=enr.id_imo,
+                vessel_name=enr.vessel_name,
+                callsign=enr.id_callsign,
+                latitude=enr.kinematic_pos_lla_lat,
+                longitude=enr.kinematic_pos_lla_lon,
+                sog=enr.kinematic_speed,
+                cog=enr.kinematic_course_true,
+                true_heading=enr.kinematic_heading_true,
+                nav_status=enr.ais_navStatus if isinstance(enr.ais_navStatus, int) else None,
+                draught=enr.vessel_draft,
+                vessel_type=str(enr.ais_typeAndCargo or ""),
+                destination=enr.voyage_destination,
+                eta=str(enr.voyage_eta or ""),
+                length=enr.vessel_length,
+                width=enr.vessel_beam,
+                raw_payload=enr.raw_attributes.get("raw_payload"),
+                raw_attributes=dict(enr.raw_attributes or {}),
+            )
+            document = self.xml_generator.generate_document(enr)
+            self.xml_generator.validate_document(document)
+            compat = self.downstream_parser.parse_xml(document)
+            if len(compat) != 1:
+                raise ValueError(f"Downstream compatibility parser returned {len(compat)} records")
+            record_id = f"{message_id}:{index}:{enr.id_mmsi or 'unknown'}"
+            self._spool_xml(source, message_id, record_id, document)
+            return index, enr, common, document
 
-        generated_docs: List[str] = []
-        spool_failures = 0
-        for index, enr in enumerate(enriched, 1):
+        materialized = []
+        futures = {
+            self._record_executor.submit(materialize, pair): pair[0]
+            for pair in enumerate(normalized_records, 1)
+        }
+        for future in as_completed(futures):
+            index = futures[future]
             try:
-                document = self.xml_generator.generate_document(enr)
-                self.xml_generator.validate_document(document)
-                # The compatibility parser is deliberately executed on every
-                # generated document before it reaches the Forwarder spool.
-                compat = self.downstream_parser.parse_xml(document)
-                if len(compat) != 1:
-                    raise ValueError(f"Downstream compatibility parser returned {len(compat)} records")
-                record_id = f"{message_id}:{index}:{enr.id_mmsi or 'unknown'}"
-                self._spool_xml(source, message_id, record_id, document)
-                generated_docs.append(document)
+                materialized.append(future.result())
             except Exception as exc:
-                spool_failures += 1
-                errors.append(f"XML generation/compatibility/spooling error for record {index}: {exc}")
+                errors.append(f"Enrichment/XML error for record {index}: {exc}")
+
+        materialized.sort(key=lambda item: item[0])
+        enriched = [item[1] for item in materialized]
+        common_records = [item[2] for item in materialized]
+        generated_docs = [item[3] for item in materialized]
+        spool_failures = len(normalized_records) - len(materialized)
 
         successful_records = len(generated_docs)
         # ACK means the envelope was accepted and every successfully parsed

@@ -19,7 +19,7 @@ FORWARDING_ENABLED=False                    # True / False
 FORWARDING_TYPE="NONE"                      # NONE / FOLDER / TCP
 FORWARDING_FOLDER=r""
 FORWARDING_HOST="127.0.0.1"; FORWARDING_PORT=0
-POLL_SECONDS=1.0; FILE_STABILITY_SECONDS=0.25
+POLL_SECONDS=1.0; FILE_STABILITY_SECONDS=0.25; RUN_ONCE=False
 PG_HOST=os.getenv("VALIDATION_PG_HOST","127.0.0.1")
 PG_PORT=int(os.getenv("VALIDATION_PG_PORT","5432"))
 PG_DATABASE=os.getenv("VALIDATION_PG_DATABASE","validation")
@@ -101,7 +101,7 @@ NAV={0:"UNDER WAY USING ENGINE",1:"ANCHORED",2:"NOT UNDER COMMAND",3:"RESTRICTED
 @dataclass
 class R:
     timestamp=None;mmsi=None;imo=None;callsign=None;vessel_name=None;vessel_type=None;latitude=None;longitude=None;sog=None;cog=None;true_heading=None;nav_status=None
-    len_to_bow=None;len_to_stern=None;width_to_port=None;width_to_starboard=None;length=None;width=None;draught=None;destination=None;eta=None;gross_tonnage=None;origin=None;arrival=None;departure=None;altitude=None;app_message_id=None;raw_payload="";raw_attributes:dict=field(default_factory=dict)
+    len_to_bow=None;len_to_stern=None;width_to_port=None;width_to_starboard=None;length=None;width=None;draught=None;destination=None;eta=None;gross_tonnage=None;origin=None;arrival=None;departure=None;altitude=None;app_message_id=None;raw_payload="";etd=None;raw_attributes:dict=field(default_factory=dict)
 
 AIS_CHARSET="@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?"
 def six(payload):
@@ -289,11 +289,24 @@ def enrich(r,ctx,conn,h):
     if r.departure is None:r.departure=fallback(ctx,"voyage.departure","lpc","berman_lpc","calling_sailing")
     if r.arrival is None:r.arrival=fallback(ctx,"voyage.arrival","berman_eta","calling_arrival")
     if r.eta is None:r.eta=fallback(ctx,"voyage.eta","eta","berman_eta")
+    if r.etd is None:r.etd=fallback(ctx,"voyage.etd","etd","berman_etd")
     if ctx.get("wrs_status_decode"):r.raw_attributes["cat_annotation"]=ctx["wrs_status_decode"]
     score=ctx.get("wrs_vigilance_score");r.raw_attributes["vigilance_score"]=score
     r.cat_identity=(1 if float(score)<300 else 4 if float(score)>600 else 3) if score is not None else "Unknown"
+    # Position-history validation; dynamic XML kinematics remain incoming-only.
+    try:
+        if h.get("_track_lat") is not None and h.get("_track_lon") is not None and r.latitude is not None and r.longitude is not None:
+            t1=iso_ms(h.get("_track_ts"));t2=iso_ms(r.timestamp)
+            if t1 is not None and t2 is not None and t2>t1:
+                p1=math.radians(float(h["_track_lat"]));p2=math.radians(float(r.latitude));dp=math.radians(float(r.latitude)-float(h["_track_lat"]));dl=math.radians(float(r.longitude)-float(h["_track_lon"]))
+                aa=math.sin(dp/2)**2+math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2;dist=3440.065*2*math.atan2(math.sqrt(aa),math.sqrt(max(0.0,1.0-aa)));calc=dist/((t2-t1)/3600000.0);limit=MAX_SPEED_KNOTS["default"];vt=type_text(r.vessel_type).lower()
+                for kk in ("high_speed","passenger","tanker","cargo","commercial","fishing"):
+                    if kk in vt:limit=MAX_SPEED_KNOTS[kk];break
+                if calc>limit:r.raw_attributes["positional_spoofing"]={"calculated_speed_knots":round(calc,3),"distance_nm":round(dist,3),"elapsed_seconds":round((t2-t1)/1000.0,3),"threshold_knots":limit,"reported_sog_knots":num(r.sog)}
+    except (TypeError,ValueError,ZeroDivisionError):
+        pass
     # final persistent MMSI fallback; never copy dynamic position/course/speed/heading/timestamps
-    for k in ("len_to_bow","len_to_stern","nav_status","vessel_type","width_to_port","width_to_starboard","length","width","draught","gross_tonnage","callsign","imo","vessel_name","destination","origin","arrival","departure","eta"):
+    for k in ("len_to_bow","len_to_stern","nav_status","vessel_type","width_to_port","width_to_starboard","length","width","draught","gross_tonnage","callsign","imo","vessel_name","destination","origin" ,"arrival","departure","eta","etd"):
         if getattr(r,k,None) in (None,"") and h.get(k) not in (None,""):setattr(r,k,h[k])
     lines=[f"WRS      | AIS SPOOFING RISK   : {ctx.get('wrs_ais_spoofing_detail') or 'NONE'}",f"WRS      | AIS GAP RISK        : {ctx.get('wrs_ais_gap_detail') or 'NONE'}",
            f"WRS      | VIGILANCE SCORE    : {ctx.get('wrs_vigilance_score') if ctx.get('wrs_vigilance_score') is not None else 'NONE'}",f"WRS      | SANCTIONS          : {ctx.get('wrs_sanctions_detail') or 'NONE'}"]
@@ -309,7 +322,9 @@ def enrich(r,ctx,conn,h):
     if ctx.get("pans_hazardous"):cp.append("HAZARDOUS="+("YES" if str(ctx["pans_hazardous"]).upper() in ("Y","YES","TRUE","1") else "NO"))
     lines.append("PANS     | CARGO             : "+(" | ".join(cp) if cp else "UNAVAILABLE"))
     lines.append("NSC      | REGION            : "+str(ctx.get("nsc_region") or "UNAVAILABLE"));lines.append("NSC      | VALIDITY          : "+((str(ctx.get("nsc_begin_date") or "UNKNOWN")+" TO "+str(ctx.get("nsc_end_date") or "UNKNOWN")) if (ctx.get("nsc_begin_date") or ctx.get("nsc_end_date")) else "UNAVAILABLE"))
-    lines.append("SOURCE   | FEED              : IMAC SAIS");r.vessel_remarks="\n".join(lines);r.foreign_track_number=r.mmsi if valid_mmsi(r.mmsi) else effective
+    lines.append("SOURCE   | FEED              : IMAC SAIS");
+    if r.raw_attributes.get("positional_spoofing"):
+        s=r.raw_attributes["positional_spoofing"];lines.append("POSITIONAL SPOOFING FOUND | calculated speed: {} kn | distance: {} nm | delta-t: {} s | threshold: {} kn | reported SOG: {} kn".format(s["calculated_speed_knots"],s["distance_nm"],s["elapsed_seconds"],s["threshold_knots"],s["reported_sog_knots"]));r.vessel_remarks="\n".join(lines);r.foreign_track_number=r.mmsi if valid_mmsi(r.mmsi) else effective
     return effective
 
 def logical(r,receipt,effective):
@@ -322,7 +337,7 @@ def logical(r,receipt,effective):
     "kinematic.speed":float(r.sog)*0.514444 if r.sog is not None else None,"sys.source.id":38,"sys.track.number":num(r.mmsi,True),"timestamp.receipt":receipt,"timestamp.source":iso_ms(r.timestamp),
     "track.flag.active":True,"track.quality":15,"vessel.beam":num(r.width),"vessel.description":type_text(r.vessel_type) if r.vessel_type not in (None,"") else None,
     "vessel.draft":num(r.draught),"vessel.grosstonnage":num(r.gross_tonnage),"vessel.length":num(r.length),"vessel.name":clean(r.vessel_name),"vessel.remarks":clean(r.vessel_remarks),
-    "voyage.arrival":clean(r.arrival),"voyage.departure":clean(r.departure),"voyage.destination":clean(r.destination),"voyage.eta":r.eta,"voyage.etd":None,"voyage.origin":clean(r.origin)}
+    "voyage.arrival":clean(r.arrival),"voyage.departure":clean(r.departure),"voyage.destination":clean(r.destination),"voyage.eta":r.eta,"voyage.etd":r.etd,"voyage.origin":clean(r.origin)}
 
 def xml(logical):
     def val(kind,v):
@@ -388,6 +403,7 @@ def run():
             folder=ROOT/INPUT_FOLDER;folder.mkdir(parents=True,exist_ok=True)
             while True:
                 for p in sorted(folder.glob("*.csv")):process_file(p,done,ref,conn)
+                if RUN_ONCE: break
                 time.sleep(POLL_SECONDS)
         else:
             with socket.socket() as s:

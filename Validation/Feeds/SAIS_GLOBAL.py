@@ -275,6 +275,7 @@ def save_state(conn,mmsi,vals,ts):
 
 def fallback(ctx,logical,*names):
     configured=(ctx.get("_parser_mapping") or {}).get(logical,[])
+    configured_default=None
     for candidate in configured:
         if ":" not in str(candidate): continue
         src,key=str(candidate).split(":",1)
@@ -282,7 +283,7 @@ def fallback(ctx,logical,*names):
             v=ctx.get(src.lower()+"_"+key)
             if v not in (None,""): return v
         elif src.lower()=="default":
-            return key
+            configured_default=key
     orders={"id.imo":("NSC","PANS","WRS"),"id.callsign":("NSC","PANS","WRS"),"vessel.name":("NSC","PANS","WRS"),
     "vessel.description":("NSC","PANS","WRS"),"ais.typeAndCargo":("NSC","PANS","WRS"),"vessel.length":("WRS","PANS","NSC"),
     "vessel.beam":("WRS","PANS","NSC"),"vessel.draft":("PANS","WRS","NSC"),"vessel.grosstonnage":("WRS","PANS","NSC"),
@@ -295,7 +296,7 @@ def fallback(ctx,logical,*names):
         for n in names:
             v=ctx.get(src.lower()+"_"+n)
             if v not in (None,""): return v
-    return None
+    return configured_default
 
 def enrich(r,ctx,conn,h):
     effective=r.mmsi if valid_mmsi(r.mmsi) else next((int(v) for v in (ctx.get("nsc_mmsi"),ctx.get("pans_mmsi"),ctx.get("wrs_mmsi")) if valid_mmsi(v)),None)

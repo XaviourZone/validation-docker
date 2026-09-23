@@ -340,7 +340,8 @@ def enrich(r,ctx,conn,h):
     lines.append("NSC      | REGION            : "+str(ctx.get("nsc_region") or "UNAVAILABLE"));lines.append("NSC      | VALIDITY          : "+((str(ctx.get("nsc_begin_date") or "UNKNOWN")+" TO "+str(ctx.get("nsc_end_date") or "UNKNOWN")) if (ctx.get("nsc_begin_date") or ctx.get("nsc_end_date")) else "UNAVAILABLE"))
     lines.append("SOURCE   | FEED              : IMAC LRIT");
     if r.raw_attributes.get("positional_spoofing"):
-        s=r.raw_attributes["positional_spoofing"];lines.append("POSITIONAL SPOOFING FOUND | calculated speed: {} kn | distance: {} nm | delta-t: {} s | threshold: {} kn | reported SOG: {} kn".format(s["calculated_speed_knots"],s["distance_nm"],s["elapsed_seconds"],s["threshold_knots"],s["reported_sog_knots"]));r.vessel_remarks="\n".join(lines);r.foreign_track_number=r.mmsi if valid_mmsi(r.mmsi) else effective
+        s=r.raw_attributes["positional_spoofing"];lines.append("POSITIONAL SPOOFING FOUND | calculated speed: {} kn | distance: {} nm | delta-t: {} s | threshold: {} kn | reported SOG: {} kn".format(s["calculated_speed_knots"],s["distance_nm"],s["elapsed_seconds"],s["threshold_knots"],s["reported_sog_knots"]))
+    r.vessel_remarks="\n".join(lines);r.foreign_track_number=r.mmsi if valid_mmsi(r.mmsi) else effective
     return effective
 
 def logical(r,receipt,effective):

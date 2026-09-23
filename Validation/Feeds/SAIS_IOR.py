@@ -2,7 +2,7 @@
 """Standalone SAIS_IOR processor: parse -> normalize -> correlate -> enrich -> XML -> forward."""
 from __future__ import annotations
 import csv, hashlib, json, logging, math, os, re, socket, time
-from dataclasses import dataclass, field
+
 from datetime import datetime, timezone
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -98,12 +98,14 @@ NAV={0:"UNDER WAY USING ENGINE",1:"ANCHORED",2:"NOT UNDER COMMAND",3:"RESTRICTED
      5:"MOORED",6:"AGROUND",7:"ENGAGED IN FISHING",8:"UNDER WAY SAILING",9:"RESERVED FOR FUTURE USE",10:"RESERVED FOR FUTURE USE",
      11:"RESERVED FOR FUTURE USE",12:"RESERVED FOR FUTURE USE",13:"RESERVED FOR FUTURE USE",14:"RESERVED FOR FUTURE USE",15:"NOT DEFINED"}
 
-@dataclass
 class R:
-    timestamp=None;mmsi=None;imo=None;callsign=None;vessel_name=None;vessel_type=None;latitude=None;longitude=None;sog=None;cog=None;true_heading=None;nav_status=None
     def __init__(self, **kwargs):
+        self.timestamp=None;self.mmsi=None;self.imo=None;self.callsign=None;self.vessel_name=None;self.vessel_type=None
+        self.latitude=None;self.longitude=None;self.sog=None;self.cog=None;self.true_heading=None;self.nav_status=None
+        self.len_to_bow=None;self.len_to_stern=None;self.width_to_port=None;self.width_to_starboard=None;self.length=None;self.width=None
+        self.draught=None;self.destination=None;self.eta=None;self.etd=None;self.gross_tonnage=None;self.origin=None;self.arrival=None;self.departure=None
+        self.altitude=None;self.app_message_id=None;self.raw_payload="";self.raw_attributes={}
         for key,value in kwargs.items(): setattr(self,key,value)
-    len_to_bow=None;len_to_stern=None;width_to_port=None;width_to_starboard=None;length=None;width=None;draught=None;destination=None;eta=None;gross_tonnage=None;origin=None;arrival=None;departure=None;altitude=None;app_message_id=None;raw_payload="";etd=None;raw_attributes:dict=field(default_factory=dict)
 
 AIS_CHARSET="@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?"
 def six(payload):

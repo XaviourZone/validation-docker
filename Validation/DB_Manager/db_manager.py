@@ -584,6 +584,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path=="/":
                 return self._send(200,HTML,"text/html; charset=utf-8")
+            if self.path.startswith("/api/config"):
+                return self._send(200,{
+                    "PANS_INPUT_DIR":setting("PANS_INPUT_DIR",str(PANS_INPUT_DIR)),
+                    "WRS_INPUT_DIR":setting("WRS_INPUT_DIR",str(WRS_INPUT_DIR)),
+                    "NSC_INPUT_DIR":setting("NSC_INPUT_DIR",str(NSC_INPUT_DIR))
+                })
             if self.path.startswith("/api/status"):
                 with db() as conn:
                     counts={}
@@ -630,6 +636,24 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(500,{"error":str(exc)})
     def do_POST(self):
         try:
+            if self.path.startswith("/api/browse/"):
+                kind=self.path.rsplit("/",1)[-1]
+                if kind not in {"wrs","nsc","pans"}:
+                    return self._send(400,{"error":"unsupported browse target"})
+                chosen=browse_folder_native()
+                if not chosen:return self._send(200,{"status":"CANCELLED"})
+                key={"wrs":"WRS_INPUT_DIR","nsc":"NSC_INPUT_DIR","pans":"PANS_INPUT_DIR"}[kind]
+                set_setting(key,chosen)
+                validator={"wrs":validate_wrs_root,"nsc":validate_nsc_root,"pans":validate_pans_root}[kind]
+                ok,msg=validator(Path(chosen))
+                return self._send(200,{"status":"VALID" if ok else "INVALID","path":chosen,"message":msg})
+            if self.path=="/api/config/folder":
+                body=self._body_json()
+                key=body.get("key");value=body.get("path")
+                allowed={"WRS_INPUT_DIR","NSC_INPUT_DIR","PANS_INPUT_DIR"}
+                if key not in allowed or not value:return self._send(400,{"error":"invalid folder config"})
+                set_setting(key,value)
+                return self._send(200,{"status":"UPDATED","key":key,"path":value})
             if self.path=="/api/mapping":
                 body=self._body_json()
                 required={"source_name","input_field","target_field"}
@@ -689,11 +713,12 @@ class Handler(BaseHTTPRequestHandler):
                     )
                 return self._send(200,{"status":"UPDATED"})
             if self.path=="/api/import/wrs":
-                return self._send(200,import_wrs_once())
+                return self._send(200,import_wrs_once(configured_dir("WRS_INPUT_DIR",WRS_INPUT_DIR)))
             if self.path=="/api/import/nsc":
-                return self._send(200,import_nsc_once())
+                return self._send(200,import_nsc_once(configured_dir("NSC_INPUT_DIR",NSC_INPUT_DIR)))
             if self.path=="/api/import/pans/once":
-                files=list(PANS_INPUT_DIR.rglob("*.xml")) if PANS_INPUT_DIR.exists() else []
+                pans_dir=configured_dir("PANS_INPUT_DIR",PANS_INPUT_DIR)
+                files=list(pans_dir.rglob("*.xml")) if pans_dir.exists() else []
                 ok=sum(1 for p in files if pans_process_file(p))
                 return self._send(200,{"status":"COMPLETED","files":len(files),"processed":ok})
             return self._send(404,{"error":"not found"})

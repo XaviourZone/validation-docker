@@ -274,16 +274,15 @@ def save_state(conn,mmsi,vals,ts):
                  (int(mmsi),json.dumps(old,ensure_ascii=False,default=str),str(ts or ""),SOURCE_NAME))
 
 def fallback(ctx,logical,*names):
-    orders={"id.imo":("NSC","PANS","WRS"),"id.callsign":("NSC","PANS","WRS"),"vessel.name":("NSC","PANS","WRS"),"vessel.description":("NSC","PANS","WRS"),"ais.typeAndCargo":("NSC","PANS","WRS"),
-    "vessel.length":("WRS","PANS","NSC"),"vessel.beam":("WRS","PANS","NSC"),"vessel.draft":("PANS","WRS","NSC"),"vessel.grosstonnage":("WRS","PANS","NSC"),
-    "voyage.arrival":("NSC","PANS","WRS"),"voyage.departure":("NSC","PANS","WRS"),"voyage.destination":("NSC","PANS","WRS"),"voyage.eta":("NSC","PANS","WRS"),"voyage.etd":("NSC","PANS","WRS"),"voyage.origin":("NSC","PANS","WRS"),
-    "cat.annotation":("WRS","PANS","NSC"),"cat.identity":("WRS","PANS","NSC"),"id.mmsi.destination":("WRS","PANS","NSC"),"foreign.track.number":("NSC","PANS","WRS")}
-    for src in orders.get(logical,("NSC","PANS","WRS")):
-        if not ctx.get(src):continue
-        for n in names:
-            v=ctx.get(src.lower()+"_"+n)
-            if v not in (None,""):return v
-    return None
+    configured=(ctx.get("_parser_mapping") or {}).get(logical,[])
+    for candidate in configured:
+        if ":" not in str(candidate): continue
+        src,key=str(candidate).split(":",1)
+        if src.lower() in ("wrs","pans","nsc"):
+            v=ctx.get(src.lower()+"_"+key)
+            if v not in (None,""): return v
+        elif src.lower()=="default":
+            return key
 
 def enrich(r,ctx,conn,h):
     effective=r.mmsi if valid_mmsi(r.mmsi) else next((int(v) for v in (ctx.get("nsc_mmsi"),ctx.get("pans_mmsi"),ctx.get("wrs_mmsi")) if valid_mmsi(v)),None)
@@ -386,6 +385,10 @@ def process_records(records,msg,ref,conn):
         try:
             h=state(conn,r.mmsi)
             ctx=ref.resolve(r.mmsi,r.imo,clean(r.callsign),clean(r.vessel_name))
+            ctx["_parser_mapping"]={}
+            for mr in conn.execute("SELECT logical_field,candidates FROM parser_mapping WHERE source_name=%s AND enabled=true",(SOURCE_NAME,)).fetchall():
+                vals=mr["candidates"] if isinstance(mr["candidates"],list) else json.loads(mr["candidates"])
+                ctx["_parser_mapping"][mr["logical_field"]]=vals
             eff=enrich(r,ctx,conn,h)
             l=logical(r,int(datetime.now(timezone.utc).timestamp()*1000),eff,srcid)
             if eff and valid_mmsi(eff):

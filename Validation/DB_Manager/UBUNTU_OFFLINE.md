@@ -3,7 +3,7 @@
 ## PostgreSQL
 PostgreSQL is an OS package/service, not a pip dependency.
 
-On an internet-connected Ubuntu machine matching the offline host's Ubuntu release and CPU architecture, download PostgreSQL packages and all dependencies into a local package directory. Transfer the complete package set to the offline host and install it locally with apt/dpkg.
+On an internet-connected Ubuntu machine matching the offline host's Ubuntu release and CPU architecture, download PostgreSQL packages, python3-tk and all dependencies into a local package directory. Transfer the complete package set to the offline host and install it locally with apt/dpkg.
 
 Create the local database user and database:
 
@@ -14,6 +14,10 @@ Create the local database user and database:
     CREATE DATABASE validation OWNER validation;
 
 Do not commit the password to Git. Set VALIDATION_PG_PASSWORD only on the deployment machine.
+
+## Native folder chooser
+
+Ubuntu needs the OS package python3-tk for the DB console Browse buttons. Download it with the matching Ubuntu packages and install it offline.
 
 ## Python wheels
 On an internet-connected machine matching the target Python version and Ubuntu architecture:

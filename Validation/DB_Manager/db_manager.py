@@ -615,6 +615,9 @@ pre{white-space:pre-wrap;max-height:400px;overflow:auto}.muted{color:#9ca3af}
 <button onclick="post('/api/import/nsc')">Update NSC</button>
 <button onclick="post('/api/import/pans/once')">Process PANS now</button><pre id="action"></pre></div>
 <div class="card"><h2>Vessel Search</h2><input id="q" placeholder="MMSI / IMO / callsign / name"><button onclick="search()">Search</button><pre id="results"></pre></div>
+<div class="card"><h2>Reference Viewer</h2><button onclick="viewRef('wrs')">WRS current</button><button onclick="viewRef('pans')">PANS current</button><button onclick="viewRef('nsc')">NSC current</button><pre id="refview"></pre></div>
+<div class="card"><h2>Source IDs</h2><button onclick="sources()">View source IDs</button><pre id="sources"></pre>
+<form onsubmit="saveSource(event)"><input id="ssid" placeholder="source_id"><input id="ssname" placeholder="source_name"><input id="sslabel" placeholder="label"><button>Save source</button></form></div>
 <div class="card"><h2>Mappings / Config</h2>
 <button onclick="mappings()">View mappings</button><button onclick="parserMappings()">View parser JSON mappings</button>
 <form onsubmit="saveMapping(event)">
@@ -633,6 +636,9 @@ async function post(u){let r=await fetch(u,{method:'POST'});document.getElementB
 async function load(){document.getElementById('status').textContent=JSON.stringify(await get('/api/status'),null,2);let c=await get('/api/config');wrsdir.textContent=c.WRS_INPUT_DIR;nscdir.textContent=c.NSC_INPUT_DIR;pansdir.textContent=c.PANS_INPUT_DIR}
 async function browse(kind){let r=await fetch('/api/browse/'+kind,{method:'POST'});let x=await r.json();document.getElementById(kind+'dir').textContent=(x.path||'')+'\n'+(x.message||x.status);load()}
 async function search(){document.getElementById('results').textContent=JSON.stringify(await get('/api/search?q='+encodeURIComponent(document.getElementById('q').value)),null,2)}
+async function viewRef(t){document.getElementById('refview').textContent=JSON.stringify(await get('/api/reference?table='+t),null,2)}
+async function sources(){document.getElementById('sources').textContent=JSON.stringify(await get('/api/sources'),null,2)}
+async function saveSource(e){e.preventDefault();let r=await fetch('/api/source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_id:Number(ssid.value),source_name:ssname.value,source_label:sslabel.value})});document.getElementById('sources').textContent=JSON.stringify(await r.json(),null,2);sources()}
 async function mappings(){document.getElementById('maps').textContent=JSON.stringify(await get('/api/mappings'),null,2)}
 async function parserMappings(){document.getElementById('pmaps').textContent=JSON.stringify(await get('/api/parser-mappings'),null,2)}
 async function saveParserMapping(e){e.preventDefault();let candidates=JSON.parse(pc.value);let r=await fetch('/api/parser-mapping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_name:ps.value,logical_field:pl.value,candidates:candidates,default_value:pd.value,transformation:pt.value})});document.getElementById('pmaps').textContent=JSON.stringify(await r.json(),null,2);parserMappings()}
@@ -686,6 +692,10 @@ class Handler(BaseHTTPRequestHandler):
                            FROM reference_nsc_current WHERE mmsi::text=%s OR imo::text=%s OR upper(callsign)=upper(%s) OR upper(vessel_name) LIKE upper(%s)
                            LIMIT 50""",(q,q,q,f"%{q}%")
                     ).fetchall()
+                return self._send(200,rows)
+            if self.path.startswith("/api/sources"):
+                with db() as conn:
+                    rows=conn.execute("SELECT * FROM source ORDER BY source_id,source_name").fetchall()
                 return self._send(200,rows)
             if self.path.startswith("/api/mappings"):
                 with db() as conn:

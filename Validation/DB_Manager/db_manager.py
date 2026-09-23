@@ -545,10 +545,14 @@ def pans_process_file(path: Path) -> bool:
                    VALUES(%s,'PANS',%s,%s,%s,%s,%s,'reference_pans_current','COMPLETED',1,now())""",
                 (batch["batch_id"],doc_type,path.name,str(path),h,path.stat().st_size)
             )
+            conn.execute("UPDATE import_batch SET completed_at=now(),status='COMPLETED',files_loaded=1,rows_loaded=1 WHERE batch_id=%s",(batch["batch_id"],))
         return True
     except Exception as exc:
         log.error("PANS file failed %s: %s",path,exc)
         with db() as conn:
+            batch=conn.execute("SELECT batch_id FROM import_batch WHERE source_system='PANS' AND status='RUNNING' ORDER BY batch_id DESC LIMIT 1").fetchone()
+            if batch:
+                conn.execute("UPDATE import_batch SET completed_at=now(),status='FAILED',error_count=1,error_message=%s WHERE batch_id=%s",(str(exc),batch["batch_id"]))
             conn.execute(
                 """INSERT INTO pans_pending(file_hash_sha256,file_name,file_path,last_error,attempts)
                    VALUES(%s,%s,%s,%s,1)

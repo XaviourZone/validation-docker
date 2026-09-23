@@ -273,6 +273,24 @@ def ensure_schema():
                    ON CONFLICT(source_name,logical_field) DO NOTHING""",(alias,)
             )
 
+        unlocode_file=ROOT/"Data_Parser"/"config"/"unlocode.json"
+        if unlocode_file.exists():
+            existing=conn.execute("SELECT count(*) AS n FROM unlocode").fetchone()["n"]
+            if existing == 0:
+                try:
+                    locs=json.loads(unlocode_file.read_text(encoding="utf-8"))
+                    for code,name in locs.items():
+                        code_clean="".join(str(code).upper().split())
+                        if len(code_clean)==5:
+                            conn.execute(
+                                """INSERT INTO unlocode(locode,country_code,location_code,location_name,raw_data)
+                                   VALUES(%s,%s,%s,%s,%s::jsonb)
+                                   ON CONFLICT(locode) DO NOTHING""",
+                                (code_clean,code_clean[:2],code_clean[2:],str(name).strip(),json.dumps({"import_source":str(unlocode_file)}))
+                            )
+                    log.info("Loaded %s UN/LOCODE entries into PostgreSQL",len(locs))
+                except Exception:
+                    log.exception("UN/LOCODE bootstrap failed")
     log.info("PostgreSQL schema/default configuration ready.")
 
 def normalized_xml_record(root: ET.Element) -> dict[str, str]:

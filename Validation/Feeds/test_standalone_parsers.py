@@ -47,7 +47,7 @@ class StandaloneParserTests(unittest.TestCase):
         x=m.xml(logical)
         self.assertIn("<id>id.mmsi</id>",x)
         self.assertIn("<id>vessel.remarks</id>",x)
-        self.assertEqual(x.count("<ns2:XTrack"),1)
+        self.assertEqual(x.count("<ns2:XTrack verbose"),1)
 
 if __name__=="__main__":
     unittest.main()

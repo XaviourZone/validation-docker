@@ -508,6 +508,10 @@ load()
 </script></body></html>"""
 
 class Handler(BaseHTTPRequestHandler):
+    def _body_json(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(length) if length else b"{}"
+        return json.loads(raw.decode("utf-8"))
     def _send(self, status, obj, content_type="application/json"):
         body = obj.encode() if isinstance(obj,str) else json.dumps(obj,default=str,ensure_ascii=False).encode()
         self.send_response(status); self.send_header("Content-Type",content_type); self.send_header("Content-Length",str(len(body))); self.end_headers(); self.wfile.write(body)
@@ -546,12 +550,79 @@ class Handler(BaseHTTPRequestHandler):
                 with db() as conn:
                     rows=conn.execute("SELECT * FROM field_mapping ORDER BY source_name,mapping_id").fetchall()
                 return self._send(200,rows)
+            if self.path.startswith("/api/reference"):
+                from urllib.parse import urlparse,parse_qs
+                table=parse_qs(urlparse(self.path).query).get("table",[""])[0]
+                allowed={"wrs":"reference_wrs_current","pans":"reference_pans_current","nsc":"reference_nsc_current"}
+                if table not in allowed:
+                    return self._send(400,{"error":"table must be wrs, pans or nsc"})
+                with db() as conn:
+                    rows=conn.execute(f"SELECT * FROM {allowed[table]} ORDER BY updated_at DESC LIMIT 100").fetchall()
+                return self._send(200,rows)
             return self._send(404,{"error":"not found"})
         except Exception as exc:
             log.exception("GET API failed")
             return self._send(500,{"error":str(exc)})
     def do_POST(self):
         try:
+            if self.path=="/api/mapping":
+                body=self._body_json()
+                required={"source_name","input_field","target_field"}
+                if not required.issubset(body):
+                    return self._send(400,{"error":"source_name,input_field,target_field required"})
+                with db() as conn:
+                    conn.execute(
+                        """INSERT INTO field_mapping(source_name,input_field,target_field,transformation,required,fallback_order,enabled)
+                           VALUES(%s,%s,%s,%s,%s,%s,%s)
+                           ON CONFLICT(source_name,input_field,target_field) DO UPDATE SET transformation=EXCLUDED.transformation,
+                             required=EXCLUDED.required,fallback_order=EXCLUDED.fallback_order,enabled=EXCLUDED.enabled""",
+                        (body["source_name"],body["input_field"],body["target_field"],body.get("transformation"),
+                         bool(body.get("required",False)),int(body.get("fallback_order",1)),bool(body.get("enabled",True)))
+                    )
+                return self._send(200,{"status":"UPDATED"})
+            if self.path=="/api/source":
+                body=self._body_json()
+                required={"source_id","source_name"}
+                if not required.issubset(body):
+                    return self._send(400,{"error":"source_id and source_name required"})
+                with db() as conn:
+                    conn.execute(
+                        """INSERT INTO source(source_id,source_name,source_label,input_type,receive_port,enabled,notes)
+                           VALUES(%s,%s,%s,%s,%s,%s,%s)
+                           ON CONFLICT(source_name) DO UPDATE SET source_id=EXCLUDED.source_id,source_label=EXCLUDED.source_label,
+                             input_type=EXCLUDED.input_type,receive_port=EXCLUDED.receive_port,enabled=EXCLUDED.enabled,notes=EXCLUDED.notes""",
+                        (int(body["source_id"]),body["source_name"],body.get("source_label"),body.get("input_type"),
+                         body.get("receive_port"),bool(body.get("enabled",True)),body.get("notes"))
+                    )
+                return self._send(200,{"status":"UPDATED"})
+            if self.path=="/api/destination":
+                body=self._body_json()
+                if not {"destination_key","destination_name"}.issubset(body):
+                    return self._send(400,{"error":"destination_key and destination_name required"})
+                with db() as conn:
+                    conn.execute(
+                        """INSERT INTO destination_mapping(destination_key,destination_name,locode,enabled)
+                           VALUES(%s,%s,%s,%s)
+                           ON CONFLICT(destination_key) DO UPDATE SET destination_name=EXCLUDED.destination_name,
+                             locode=EXCLUDED.locode,enabled=EXCLUDED.enabled,updated_at=now()""",
+                        (body["destination_key"],body["destination_name"],body.get("locode"),bool(body.get("enabled",True)))
+                    )
+                return self._send(200,{"status":"UPDATED"})
+            if self.path=="/api/unlocode":
+                body=self._body_json()
+                if not {"locode","location_name"}.issubset(body):
+                    return self._send(400,{"error":"locode and location_name required"})
+                with db() as conn:
+                    conn.execute(
+                        """INSERT INTO unlocode(locode,country_code,location_code,location_name,subdivision,function_code,status,raw_data)
+                           VALUES(%s,%s,%s,%s,%s,%s,%s,%s::jsonb)
+                           ON CONFLICT(locode) DO UPDATE SET country_code=EXCLUDED.country_code,location_code=EXCLUDED.location_code,
+                             location_name=EXCLUDED.location_name,subdivision=EXCLUDED.subdivision,function_code=EXCLUDED.function_code,
+                             status=EXCLUDED.status,raw_data=EXCLUDED.raw_data,updated_at=now()""",
+                        (body["locode"],body.get("country_code"),body.get("location_code"),body["location_name"],body.get("subdivision"),
+                         body.get("function_code"),body.get("status"),json.dumps(body.get("raw_data",{}),ensure_ascii=False))
+                    )
+                return self._send(200,{"status":"UPDATED"})
             if self.path=="/api/import/wrs":
                 return self._send(200,import_wrs_once())
             if self.path=="/api/import/nsc":

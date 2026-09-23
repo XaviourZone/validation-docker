@@ -1,6 +1,7 @@
 -- Validation PostgreSQL schema
 CREATE TABLE IF NOT EXISTS source (
-    source_id INTEGER PRIMARY KEY,
+    source_key BIGSERIAL PRIMARY KEY,
+    source_id INTEGER NOT NULL,
     source_name TEXT UNIQUE NOT NULL,
     source_label TEXT,
     input_type TEXT,

@@ -354,14 +354,14 @@ def enrich(r,ctx,conn,h):
     r.vessel_remarks="\n".join(lines);r.foreign_track_number=r.mmsi if valid_mmsi(r.mmsi) else effective
     return effective
 
-def logical(r,receipt,effective):
+def logical(r,receipt,effective,srcid):
     return {"ais.lenToBow":num(r.len_to_bow,True),"ais.lenToStern":num(r.len_to_stern,True),"ais.navStatus":NAV.get(int(r.nav_status),str(r.nav_status)) if r.nav_status not in (None,"") else None,
     "ais.typeAndCargo":type_text(r.vessel_type) if r.vessel_type not in (None,"") else None,"ais.widthToPort":num(r.width_to_port),"ais.widthToStarboard":num(r.width_to_starboard),"app.message.id":r.app_message_id,
     "cat.annotation":r.raw_attributes.get("cat_annotation"),"cat.category":"Surface","cat.identity":r.cat_identity,"foreign.track.number":r.foreign_track_number,"id.callsign":clean(r.callsign),
     "id.imo":num(r.imo,True),"id.mmsi":num(r.mmsi,True),"id.mmsi.destination":r.raw_attributes.get("vigilance_score"),"kinematic.course.true":math.radians(float(r.cog)) if r.cog is not None else None,
     "kinematic.flag.3d":r.altitude is not None,"kinematic.heading.true":math.radians(float(r.true_heading)) if r.true_heading is not None else None,"kinematic.pos.lla.alt":num(r.altitude),
     "kinematic.pos.lla.lat":math.radians(float(r.latitude)) if r.latitude is not None else None,"kinematic.pos.lla.lon":math.radians(float(r.longitude)) if r.longitude is not None else None,
-    "kinematic.speed":float(r.sog)*0.514444 if r.sog is not None else None,"sys.source.id":40,"sys.track.number":num(r.mmsi,True),"timestamp.receipt":receipt,"timestamp.source":iso_ms(r.timestamp),
+    "kinematic.speed":float(r.sog)*0.514444 if r.sog is not None else None,"sys.source.id":srcid,"sys.track.number":num(r.mmsi,True),"timestamp.receipt":receipt,"timestamp.source":iso_ms(r.timestamp),
     "track.flag.active":True,"track.quality":15,"vessel.beam":num(r.width),"vessel.description":type_text(r.vessel_type) if r.vessel_type not in (None,"") else None,
     "vessel.draft":num(r.draught),"vessel.grosstonnage":num(r.gross_tonnage),"vessel.length":num(r.length),"vessel.name":clean(r.vessel_name),"vessel.remarks":clean(r.vessel_remarks),
     "voyage.arrival":clean(r.arrival),"voyage.departure":clean(r.departure),"voyage.destination":clean(r.destination),"voyage.eta":r.eta,"voyage.etd":r.etd,"voyage.origin":clean(r.origin)}
@@ -394,13 +394,16 @@ def xml(logical):
     return text
 
 def process_records(records,msg,ref,conn):
+    source_row=conn.execute("SELECT source_id FROM source WHERE source_name=%s",(SOURCE_NAME,)).fetchone()
+    if not source_row: raise RuntimeError(f"Source ID is not configured in PostgreSQL for {SOURCE_NAME}")
+    srcid=int(source_row["source_id"])
     made=0
     for i,r in enumerate(records,1):
         try:
             h=state(conn,r.mmsi)
             ctx=ref.resolve(r.mmsi,r.imo,clean(r.callsign),clean(r.vessel_name))
             eff=enrich(r,ctx,conn,h)
-            l=logical(r,int(datetime.now(timezone.utc).timestamp()*1000),eff)
+            l=logical(r,int(datetime.now(timezone.utc).timestamp()*1000),eff,srcid)
             if eff and valid_mmsi(eff):
                 ts=l["timestamp.source"];l["track.flag.active"]=(ts is None or int(datetime.now(timezone.utc).timestamp()*1000)-int(ts)<ACTIVE_THRESHOLD_SECONDS*1000)
                 save_state(conn,eff,{k:l[k] for k in l if k in ("ais.lenToBow","ais.lenToStern","ais.navStatus","ais.typeAndCargo","ais.widthToPort","ais.widthToStarboard","cat.annotation","cat.category","cat.identity","foreign.track.number","id.callsign","id.imo","id.mmsi","id.mmsi.destination","vessel.beam","vessel.description","vessel.draft","vessel.grosstonnage","vessel.length","vessel.name","voyage.arrival","voyage.departure","voyage.destination","voyage.eta","voyage.etd","voyage.origin")}|{"_track_lat":r.latitude,"_track_lon":r.longitude,"_track_ts":r.timestamp},r.timestamp)

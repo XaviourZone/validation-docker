@@ -289,6 +289,19 @@ def fallback(ctx,logical,*names):
             if v not in (None,""): return v
         elif src.lower()=="default":
             return key
+    orders={"id.imo":("NSC","PANS","WRS"),"id.callsign":("NSC","PANS","WRS"),"vessel.name":("NSC","PANS","WRS"),
+    "vessel.description":("NSC","PANS","WRS"),"ais.typeAndCargo":("NSC","PANS","WRS"),"vessel.length":("WRS","PANS","NSC"),
+    "vessel.beam":("WRS","PANS","NSC"),"vessel.draft":("PANS","WRS","NSC"),"vessel.grosstonnage":("WRS","PANS","NSC"),
+    "voyage.arrival":("NSC","PANS","WRS"),"voyage.departure":("NSC","PANS","WRS"),"voyage.destination":("NSC","PANS","WRS"),
+    "voyage.eta":("NSC","PANS","WRS"),"voyage.etd":("NSC","PANS","WRS"),"voyage.origin":("NSC","PANS","WRS"),
+    "cat.annotation":("WRS","PANS","NSC"),"cat.identity":("WRS","PANS","NSC"),"id.mmsi.destination":("WRS","PANS","NSC"),
+    "foreign.track.number":("NSC","PANS","WRS")}
+    for src in orders.get(logical,("NSC","PANS","WRS")):
+        if not ctx.get(src): continue
+        for n in names:
+            v=ctx.get(src.lower()+"_"+n)
+            if v not in (None,""): return v
+    return None
 
 def enrich(r,ctx,conn,h):
     effective=r.mmsi if valid_mmsi(r.mmsi) else next((int(v) for v in (ctx.get("nsc_mmsi"),ctx.get("pans_mmsi"),ctx.get("wrs_mmsi")) if valid_mmsi(v)),None)

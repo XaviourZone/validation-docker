@@ -304,7 +304,10 @@ def enrich(r,ctx,conn,h):
     if r.eta is None:r.eta=fallback(ctx,"voyage.eta","eta","berman_eta")
     if r.etd is None:r.etd=fallback(ctx,"voyage.etd","etd","berman_etd")
     if ctx.get("wrs_status_decode"):r.raw_attributes["cat_annotation"]=ctx["wrs_status_decode"]
-    score=ctx.get("wrs_vigilance_score");r.raw_attributes["vigilance_score"]=score
+    elif h.get("cat.annotation") not in (None,""):r.raw_attributes["cat_annotation"]=h.get("cat.annotation")
+    score=ctx.get("wrs_vigilance_score")
+    if score is None: score=h.get("id.mmsi.destination")
+    r.raw_attributes["vigilance_score"]=score
     r.cat_identity=(1 if float(score)<300 else 4 if float(score)>600 else 3) if score is not None else "Unknown"
     # Position-history validation; dynamic XML kinematics remain incoming-only.
     try:

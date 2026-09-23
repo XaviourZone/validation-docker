@@ -308,7 +308,7 @@ def enrich(r,ctx,conn,h):
     score=ctx.get("wrs_vigilance_score")
     if score is None: score=h.get("id.mmsi.destination")
     r.raw_attributes["vigilance_score"]=score
-    r.cat_identity=(1 if float(score)<300 else 4 if float(score)>600 else 3) if score is not None else "Unknown"
+    r.cat_identity=(1 if float(score)<300 else 4 if float(score)>600 else 3) if score is not None else h.get("cat.identity","Unknown")
     # Position-history validation; dynamic XML kinematics remain incoming-only.
     try:
         if h.get("_track_lat") is not None and h.get("_track_lon") is not None and r.latitude is not None and r.longitude is not None:

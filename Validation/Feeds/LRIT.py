@@ -238,6 +238,11 @@ class Ref:
                     elif target=="vig":x["wrs_vigilance_score"]=num(self.v(dd,"SCORE"))
                     elif target=="call":x.update(wrs_calling_place=self.v(dd,"PLACE"),wrs_calling_arrival=self.v(dd,"ARRIVAL_DATE"),wrs_calling_sailing=self.v(dd,"SAILING_DATE"))
                     else:x["wrs_status_decode"]=self.v(dd,"STATUS_DECODE")
+            if x.get("wrs_vessel_type"):
+                target=str(x["wrs_vessel_type"]).lower()[:20]
+                for rr in self.c.execute("SELECT data FROM reference_wrs_current WHERE dataset_name='DECODE_AIS_TYPE_CARGO'").fetchall():
+                    dd=rr["data"] or {};desc=self.v(dd,"DESCRIPTION")
+                    if desc and target in str(desc).lower(): x["wrs_ais_type_code"]=num(self.v(dd,"ID"),True); break
             for ds,key in (("AISSPOOFING_RISK","wrs_ais_spoofing_detail"),("AIS_GAP_RISK","wrs_ais_gap_detail"),("AIS_MNPTN_RISK","wrs_ais_identity_detail"),("VESSEL_SANCTIONS","wrs_sanctions_detail")):
                 z=aux(ds)
                 if z:
@@ -300,7 +305,7 @@ def enrich(r,ctx,conn,h):
     effective=r.mmsi if valid_mmsi(r.mmsi) else next((int(v) for v in (ctx.get("nsc_mmsi"),ctx.get("pans_mmsi"),ctx.get("wrs_mmsi")) if valid_mmsi(v)),None)
     r.callsign=clean(r.callsign) or clean(fallback(ctx,"id.callsign","callsign"));r.imo=int(r.imo) if valid_imo(r.imo) else fallback(ctx,"id.imo","imo")
     r.vessel_name=clean(r.vessel_name);r.vessel_name=r.vessel_name if r.vessel_name and r.vessel_name.upper() not in ("UNKNOWN","N/A","NONE","-") else clean(fallback(ctx,"vessel.name","vessel_name")) or "UNKNOWN"
-    r.vessel_type=r.vessel_type if r.vessel_type not in (None,"") else fallback(ctx,"ais.typeAndCargo","vessel_type");r.length=r.length if r.length is not None else num(fallback(ctx,"vessel.length","loa"))
+    r.vessel_type=r.vessel_type if r.vessel_type not in (None,"") else (type_text(ctx.get("wrs_ais_type_code")) if ctx.get("wrs_ais_type_code") is not None else fallback(ctx,"ais.typeAndCargo","vessel_type"));r.length=r.length if r.length is not None else num(fallback(ctx,"vessel.length","loa"))
     r.width=r.width if r.width is not None else num(fallback(ctx,"vessel.beam","breadth","beam"));r.draught=r.draught if r.draught is not None else num(fallback(ctx,"vessel.draft","draft","max_draft"));r.gross_tonnage=r.gross_tonnage if r.gross_tonnage is not None else num(fallback(ctx,"vessel.grosstonnage","gross","grt"))
     if r.destination is None:r.destination=fallback(ctx,"voyage.destination","berman_dest","npc","calling_place")
     if r.origin is None:r.origin=fallback(ctx,"voyage.origin","org_dep","calling_place")

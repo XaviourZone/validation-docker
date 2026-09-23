@@ -101,6 +101,8 @@ NAV={0:"UNDER WAY USING ENGINE",1:"ANCHORED",2:"NOT UNDER COMMAND",3:"RESTRICTED
 @dataclass
 class R:
     timestamp=None;mmsi=None;imo=None;callsign=None;vessel_name=None;vessel_type=None;latitude=None;longitude=None;sog=None;cog=None;true_heading=None;nav_status=None
+    def __init__(self, **kwargs):
+        for key,value in kwargs.items(): setattr(self,key,value)
     len_to_bow=None;len_to_stern=None;width_to_port=None;width_to_starboard=None;length=None;width=None;draught=None;destination=None;eta=None;gross_tonnage=None;origin=None;arrival=None;departure=None;altitude=None;app_message_id=None;raw_payload="";etd=None;raw_attributes:dict=field(default_factory=dict)
 
 AIS_CHARSET="@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_ !\"#$%&'()*+,-./0123456789:;<=>?"

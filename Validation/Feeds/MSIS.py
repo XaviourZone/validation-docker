@@ -188,34 +188,22 @@ def parse_lines(lines):
     return out
 
 
-def parse_lines_msis(lines):
-    out=[]
-    if not any(str(x).strip() for x in lines):
-        return out
-    # MSIS is already-decoded AIS. No NMEA/AIS bit decoding is performed here.
-    reader=csv.DictReader(lines)
-    required={"mmsi","latitude","longitude","sog","cog","true_heading","updated","ship_name","imo","callsign","length","width","draught","destination","type_and_cargo","eta"}
-    if reader.fieldnames:
-        names={x.strip() for x in reader.fieldnames if x}
-        if "mmsi" not in names and "MMSI" not in names:
-            raise ValueError("MSIS CSV is missing MMSI column")
+def parse_msis(lines):
+    out=[];reader=csv.DictReader(lines)
+    if reader.fieldnames and not any(x in reader.fieldnames for x in ("mmsi","MMSI")): raise ValueError("MSIS CSV missing MMSI column")
     for row in reader:
-        def first(*names):
+        def f(*names):
             for n in names:
                 v=row.get(n)
                 if v not in (None,""): return v
-            return None
-        r=R()
-        r.mmsi=num(first("mmsi","MMSI"),True)
-        r.latitude=num(first("latitude","lat"));r.longitude=num(first("longitude","lon","lng"))
-        r.sog=num(first("sog","speed"));r.cog=num(first("cog","course"));r.true_heading=num(first("true_heading","heading"))
-        r.nav_status=num(first("navigation_status","navigatetion_status","nav_status"),True)
-        r.timestamp=first("updated","timestamp","time") or datetime.now(timezone.utc).isoformat()
-        r.vessel_name=clean(first("ship_name","vessel_name","name"));r.imo=num(first("imo","IMO"),True);r.callsign=clean(first("callsign","call_sign"))
-        r.length=num(first("length","loa"));r.width=num(first("width","beam"));r.draught=num(first("draught","draft"))
-        r.destination=clean(first("destination","voyage_destination"));r.vessel_type=first("type_and_cargo","vessel_type","type");r.eta=clean(first("eta","ETA"))
-        r.raw_payload=json.dumps(row,ensure_ascii=False)
-        out.append(r)
+        out.append(R(timestamp=f("updated","timestamp","time") or datetime.now(timezone.utc).isoformat(),
+            mmsi=num(f("mmsi","MMSI"),True),latitude=num(f("latitude","lat")),longitude=num(f("longitude","lon","lng")),
+            sog=num(f("sog","speed")),cog=num(f("cog","course")),true_heading=num(f("true_heading","heading")),
+            nav_status=num(f("navigation_status","navigatetion_status","nav_status"),True),
+            vessel_name=clean(f("ship_name","vessel_name","name")),imo=num(f("imo","IMO"),True),callsign=clean(f("callsign","call_sign")),
+            length=num(f("length","loa")),width=num(f("width","beam")),draught=num(f("draught","draft")),
+            destination=clean(f("destination","voyage_destination")),vessel_type=f("type_and_cargo","vessel_type","type"),
+            eta=clean(f("eta","ETA")),raw_payload=json.dumps(row,ensure_ascii=False)))
     return out
 
 class Ref:
@@ -408,7 +396,7 @@ def process_file(p,done,ref,conn):
         if time.time()-p.stat().st_mtime<FILE_STABILITY_SECONDS:return
         h=hashlib.sha256(p.read_bytes()).hexdigest()
         if h in done:return
-        lines=p.read_text(encoding="utf-8",errors="replace").splitlines();records=parse_lines_msis(lines);n=process_records(records,p.stem,ref,conn);done.add(h);DONE_FILE.write_text(json.dumps(sorted(done)),encoding="utf-8");log.info("Processed %s: records=%d xml=%d",p.name,len(records),n)
+        lines=p.read_text(encoding="utf-8",errors="replace").splitlines();records=parse_msis(lines);n=process_records(records,p.stem,ref,conn);done.add(h);DONE_FILE.write_text(json.dumps(sorted(done)),encoding="utf-8");log.info("Processed %s: records=%d xml=%d",p.name,len(records),n)
     except Exception:log.exception("File failed %s",p)
 
 def run():

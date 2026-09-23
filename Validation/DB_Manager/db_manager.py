@@ -265,6 +265,13 @@ def ensure_schema():
                    ON CONFLICT(source_name,logical_field) DO NOTHING""",
                 (source_name,logical_field,json.dumps(candidates),default_value,transformation)
             )
+        for alias in ("SAIS_GLOBAL","VATMS_EAST","VATMS_WEST","NAIS"):
+            conn.execute(
+                """INSERT INTO parser_mapping(source_name,logical_field,candidates,default_value,transformation)
+                   SELECT %s,logical_field,candidates,default_value,transformation
+                   FROM parser_mapping WHERE source_name='SAIS_IOR'
+                   ON CONFLICT(source_name,logical_field) DO NOTHING""",(alias,)
+            )
 
     log.info("PostgreSQL schema/default configuration ready.")
 

@@ -594,10 +594,11 @@ pre{white-space:pre-wrap;max-height:400px;overflow:auto}.muted{color:#9ca3af}
 <button onclick="post('/api/import/pans/once')">Process PANS now</button><pre id="action"></pre></div>
 <div class="card"><h2>Vessel Search</h2><input id="q" placeholder="MMSI / IMO / callsign / name"><button onclick="search()">Search</button><pre id="results"></pre></div>
 <div class="card"><h2>Mappings / Config</h2>
-<button onclick="mappings()">View mappings</button>
+<button onclick="mappings()">View mappings</button><button onclick="parserMappings()">View parser JSON mappings</button>
 <form onsubmit="saveMapping(event)">
 <input id="ms" placeholder="source_name"><input id="mi" placeholder="input_field"><input id="mt" placeholder="target_field">
-<input id="mx" placeholder="transformation"><button>Save mapping</button></form><pre id="maps"></pre>
+<input id="mx" placeholder="transformation"><button>Save mapping</button></form><pre id="maps"></pre><pre id="pmaps"></pre>
+<form onsubmit="saveParserMapping(event)"><input id="ps" placeholder="source_name"><input id="pl" placeholder="logical field"><input id="pc" placeholder='candidates JSON, e.g. ["incoming:mmsi"]'><input id="pd" placeholder="default"><input id="pt" placeholder="transformation"><button>Save parser mapping</button></form>
 </div>
 <div class="card"><h2>UN/LOCODE / Destination</h2>
 <form onsubmit="saveLoc(event)"><input id="lk" placeholder="LOCODE"><input id="ln" placeholder="Location name"><input id="lc" placeholder="Country"><button>Save UN/LOCODE</button></form>
@@ -611,6 +612,8 @@ async function load(){document.getElementById('status').textContent=JSON.stringi
 async function browse(kind){let r=await fetch('/api/browse/'+kind,{method:'POST'});let x=await r.json();document.getElementById(kind+'dir').textContent=(x.path||'')+'\n'+(x.message||x.status);load()}
 async function search(){document.getElementById('results').textContent=JSON.stringify(await get('/api/search?q='+encodeURIComponent(document.getElementById('q').value)),null,2)}
 async function mappings(){document.getElementById('maps').textContent=JSON.stringify(await get('/api/mappings'),null,2)}
+async function parserMappings(){document.getElementById('pmaps').textContent=JSON.stringify(await get('/api/parser-mappings'),null,2)}
+async function saveParserMapping(e){e.preventDefault();let candidates=JSON.parse(pc.value);let r=await fetch('/api/parser-mapping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_name:ps.value,logical_field:pl.value,candidates:candidates,default_value:pd.value,transformation:pt.value})});document.getElementById('pmaps').textContent=JSON.stringify(await r.json(),null,2);parserMappings()}
 async function saveMapping(e){e.preventDefault();let r=await fetch('/api/mapping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_name:ms.value,input_field:mi.value,target_field:mt.value,transformation:mx.value})});document.getElementById('maps').textContent=JSON.stringify(await r.json(),null,2);mappings()}
 async function saveLoc(e){e.preventDefault();let r=await fetch('/api/unlocode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({locode:lk.value,location_name:ln.value,country_code:lc.value})});document.getElementById('cfg').textContent=JSON.stringify(await r.json(),null,2)}
 async function saveDest(e){e.preventDefault();let r=await fetch('/api/destination',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination_key:dk.value,destination_name:dn.value,locode:dl.value})});document.getElementById('cfg').textContent=JSON.stringify(await r.json(),null,2)}
@@ -666,6 +669,10 @@ class Handler(BaseHTTPRequestHandler):
                 with db() as conn:
                     rows=conn.execute("SELECT * FROM field_mapping ORDER BY source_name,mapping_id").fetchall()
                 return self._send(200,rows)
+            if self.path.startswith("/api/parser-mappings"):
+                with db() as conn:
+                    rows=conn.execute("SELECT * FROM parser_mapping ORDER BY source_name,logical_field").fetchall()
+                return self._send(200,rows)
             if self.path.startswith("/api/reference"):
                 from urllib.parse import urlparse,parse_qs
                 table=parse_qs(urlparse(self.path).query).get("table",[""])[0]
@@ -699,6 +706,21 @@ class Handler(BaseHTTPRequestHandler):
                 if key not in allowed or not value:return self._send(400,{"error":"invalid folder config"})
                 set_setting(key,value)
                 return self._send(200,{"status":"UPDATED","key":key,"path":value})
+            if self.path=="/api/parser-mapping":
+                body=self._body_json()
+                if not {"source_name","logical_field","candidates"}.issubset(body):
+                    return self._send(400,{"error":"source_name, logical_field and candidates required"})
+                with db() as conn:
+                    conn.execute(
+                        """INSERT INTO parser_mapping(source_name,logical_field,candidates,default_value,transformation,enabled)
+                           VALUES(%s,%s,%s::jsonb,%s,%s,%s)
+                           ON CONFLICT(source_name,logical_field) DO UPDATE SET candidates=EXCLUDED.candidates,
+                             default_value=EXCLUDED.default_value,transformation=EXCLUDED.transformation,
+                             enabled=EXCLUDED.enabled,updated_at=now()""",
+                        (body["source_name"],body["logical_field"],json.dumps(body["candidates"]),body.get("default_value"),
+                         body.get("transformation"),bool(body.get("enabled",True)))
+                    )
+                return self._send(200,{"status":"UPDATED"})
             if self.path=="/api/mapping":
                 body=self._body_json()
                 required={"source_name","input_field","target_field"}

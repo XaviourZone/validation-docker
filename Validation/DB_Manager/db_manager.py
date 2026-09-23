@@ -84,6 +84,58 @@ DEFAULT_MAPPINGS = [
     ("NAIS","AIS_MMSI","id.mmsi","integer",False,1),
 ]
 
+def setting(key, default=None):
+    with db() as conn:
+        row=conn.execute("SELECT value FROM system_config WHERE key=%s",(key,)).fetchone()
+    return row["value"] if row else default
+
+def set_setting(key, value):
+    with db() as conn:
+        conn.execute("""INSERT INTO system_config(key,value) VALUES(%s,%s)
+                        ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_at=now()""",(key,str(value)))
+
+def configured_dir(key, fallback):
+    return Path(setting(key, str(fallback)))
+
+def browse_folder_native():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root=tk.Tk(); root.withdraw(); root.attributes("-topmost", True)
+        path=filedialog.askdirectory(title="Select Validation source folder")
+        root.destroy()
+        return path or None
+    except Exception as exc:
+        log.warning("Native folder dialog unavailable: %s", exc)
+        return None
+
+def validate_wrs_root(path: Path):
+    if not path.exists() or not path.is_dir():
+        return False, "WRS root does not exist"
+    dirs={p.name.lower():p for p in path.iterdir() if p.is_dir()}
+    if "datasets" not in dirs:
+        return False, "WRS root must contain Datasets"
+    if "decode files" not in dirs and "decode" not in dirs:
+        return False, "WRS root must contain Decode files or Decode"
+    if not list(dirs["datasets"].rglob("*.csv")):
+        return False, "WRS Datasets contains no CSV files"
+    return True, "WRS root valid"
+
+def validate_nsc_root(path: Path):
+    if not path.exists() or not path.is_dir():
+        return False, "NSC root does not exist"
+    files=list(path.rglob("*.csv"))+list(path.rglob("*.xlsx"))+list(path.rglob("*.xlsm"))
+    names=[p.name.upper() for p in files]
+    east=any("NSC_EAST" in n or "EAST" in p.parent.name.upper() for n,p in zip(names,files))
+    west=any("NSC_WEST" in n or "WEST" in p.parent.name.upper() for n,p in zip(names,files))
+    return (True,"NSC EAST/WEST sources found") if east and west else (False,"NSC root must provide both EAST and WEST sources")
+
+def validate_pans_root(path: Path):
+    if not path.exists() or not path.is_dir():
+        return False, "PANS folder does not exist"
+    count=len(list(path.rglob("*.xml")))
+    return (True,f"PANS folder valid: {count} XML files") if count else (False,"PANS folder contains no XML files")
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as f:
@@ -272,7 +324,7 @@ def upsert_reference(table: str, history_table: str, identity_cols: dict, data: 
                 (*vals, source_file, source_hash, data_json),
             )
 
-def import_wrs_once(input_dir: Path = WRS_INPUT_DIR) -> dict:
+def import_wrs_once(input_dir: Path | None = None) -> dict:\n    input_dir = input_dir or configured_dir('WRS_INPUT_DIR', WRS_INPUT_DIR)\n    ok, msg = validate_wrs_root(input_dir)\n    if not ok: return {'status':'INVALID_SOURCE','error':msg,'path':str(input_dir)}
     files = sorted(input_dir.rglob("*.csv")) if input_dir.exists() else []
     if not files:
         return {"status":"NO_DATA","files":0,"rows":0}
@@ -349,7 +401,7 @@ def import_wrs_once(input_dir: Path = WRS_INPUT_DIR) -> dict:
                      ("COMPLETED" if errors==0 else "FAILED", files.__len__()-errors, loaded, errors, batch_id))
     return {"status":"COMPLETED" if errors==0 else "FAILED","files":len(files),"rows":loaded,"errors":errors}
 
-def import_nsc_once(input_dir: Path = NSC_INPUT_DIR) -> dict:
+def import_nsc_once(input_dir: Path | None = None) -> dict:\n    input_dir = input_dir or configured_dir('NSC_INPUT_DIR', NSC_INPUT_DIR)\n    ok, msg = validate_nsc_root(input_dir)\n    if not ok: return {'status':'INVALID_SOURCE','error':msg,'path':str(input_dir)}
     try:
         import openpyxl
     except ImportError:
@@ -457,10 +509,11 @@ class Manager:
         self.thread=threading.Thread(target=self.pans_loop,daemon=True,name="PANS-Monitor")
         self.thread.start()
     def pans_loop(self):
-        PANS_INPUT_DIR.mkdir(parents=True,exist_ok=True)
         while not self.stop_event.is_set():
             try:
-                for path in sorted(PANS_INPUT_DIR.rglob("*.xml")):
+                pans_dir=configured_dir('PANS_INPUT_DIR',PANS_INPUT_DIR)
+                pans_dir.mkdir(parents=True,exist_ok=True)
+                for path in sorted(pans_dir.rglob("*.xml")):
                     try:
                         age=time.time()-path.stat().st_mtime
                         if age < PANS_STABILITY_SECONDS:

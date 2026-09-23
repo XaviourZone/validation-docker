@@ -544,7 +544,10 @@ pre{white-space:pre-wrap;max-height:400px;overflow:auto}.muted{color:#9ca3af}
 <p class="muted">PANS is monitored continuously. WRS/NSC are manual updates. Reference history is retained; current rows are UPSERTed.</p>
 <div class="grid">
 <div class="card"><h2>Status</h2><pre id="status">Loading...</pre><button onclick="load()">Refresh</button></div>
-<div class="card"><h2>Reference Updates</h2>
+<div class="card"><h2>Reference Folders</h2>
+<div>WRS: <button onclick="browse('wrs')">Browse</button></div><pre id="wrsdir"></pre>
+<div>NSC: <button onclick="browse('nsc')">Browse</button></div><pre id="nscdir"></pre>
+<div>PANS: <button onclick="browse('pans')">Browse</button></div><pre id="pansdir"></pre>
 <button onclick="post('/api/import/wrs')">Update WRS</button>
 <button onclick="post('/api/import/nsc')">Update NSC</button>
 <button onclick="post('/api/import/pans/once')">Process PANS now</button><pre id="action"></pre></div>
@@ -563,7 +566,8 @@ pre{white-space:pre-wrap;max-height:400px;overflow:auto}.muted{color:#9ca3af}
 <script>
 async function get(u){let r=await fetch(u);return await r.json()}
 async function post(u){let r=await fetch(u,{method:'POST'});document.getElementById('action').textContent=JSON.stringify(await r.json(),null,2);load()}
-async function load(){document.getElementById('status').textContent=JSON.stringify(await get('/api/status'),null,2)}
+async function load(){document.getElementById('status').textContent=JSON.stringify(await get('/api/status'),null,2);let c=await get('/api/config');wrsdir.textContent=c.WRS_INPUT_DIR;nscdir.textContent=c.NSC_INPUT_DIR;pansdir.textContent=c.PANS_INPUT_DIR}
+async function browse(kind){let r=await fetch('/api/browse/'+kind,{method:'POST'});let x=await r.json();document.getElementById(kind+'dir').textContent=(x.path||'')+'\n'+(x.message||x.status);load()}
 async function search(){document.getElementById('results').textContent=JSON.stringify(await get('/api/search?q='+encodeURIComponent(document.getElementById('q').value)),null,2)}
 async function mappings(){document.getElementById('maps').textContent=JSON.stringify(await get('/api/mappings'),null,2)}
 async function saveMapping(e){e.preventDefault();let r=await fetch('/api/mapping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_name:ms.value,input_field:mi.value,target_field:mt.value,transformation:mx.value})});document.getElementById('maps').textContent=JSON.stringify(await r.json(),null,2);mappings()}

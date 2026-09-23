@@ -170,19 +170,11 @@ def ensure_schema():
             conn.execute(
                 """INSERT INTO source(source_id,source_name,source_label,input_type,receive_port)
                    VALUES(%s,%s,%s,%s,%s)
-                   ON CONFLICT(source_id) DO UPDATE SET source_label=EXCLUDED.source_label,
-                     input_type=EXCLUDED.input_type, receive_port=EXCLUDED.receive_port""",
+                   ON CONFLICT(source_name) DO UPDATE SET source_id=EXCLUDED.source_id,
+                     source_label=EXCLUDED.source_label, input_type=EXCLUDED.input_type,
+                     receive_port=EXCLUDED.receive_port""",
                 (source_id, source_name, label, input_type, port),
             )
-        # Source IDs are numeric downstream IDs. The two SAIS names share ID 38,
-        # so source_name cannot be unique across aliases in the schema; replace
-        # an alias with a generated unique name when needed.
-        conn.execute("DELETE FROM source WHERE source_id=38 AND source_name='SAIS_GLOBAL'")
-        conn.execute(
-            """INSERT INTO source(source_id,source_name,source_label,input_type,receive_port)
-               VALUES(38,'SAIS_GLOBAL','IMAC SAIS','FILE/TCP',10001)
-               ON CONFLICT(source_id) DO NOTHING"""
-        )
         for row in DEFAULT_MAPPINGS:
             conn.execute(
                 """INSERT INTO field_mapping(source_name,input_field,target_field,transformation,required,fallback_order)

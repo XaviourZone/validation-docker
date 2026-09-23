@@ -84,6 +84,33 @@ DEFAULT_MAPPINGS = [
     ("NAIS","AIS_MMSI","id.mmsi","integer",False,1),
 ]
 
+PARSER_MAPPING_DEFAULTS = [
+    ("SAIS_IOR","id.mmsi",["incoming:mmsi"],None,None),("SAIS_IOR","id.imo",["incoming:imo","ais_state:imo"],None,None),
+    ("SAIS_IOR","id.callsign",["incoming:callsign","ais_state:callsign"],None,None),("SAIS_IOR","vessel.name",["incoming:vessel_name","ais_state:vessel_name"],"UNKNOWN",None),
+    ("SAIS_IOR","ais.typeAndCargo",["incoming:vessel_type","ais_state:vessel_type"],None,None),("SAIS_IOR","vessel.length",["incoming:length","ais_state:length"],None,None),
+    ("SAIS_IOR","vessel.beam",["incoming:width","ais_state:width"],None,None),("SAIS_IOR","vessel.draft",["incoming:draught","ais_state:draught"],None,None),
+    ("SAIS_IOR","kinematic.pos.lla.lat",["incoming:latitude"],None,"degrees_to_radians"),("SAIS_IOR","kinematic.pos.lla.lon",["incoming:longitude"],None,"degrees_to_radians"),
+    ("SAIS_IOR","kinematic.speed",["incoming:sog"],None,"knots_to_ms"),("SAIS_IOR","kinematic.course.true",["incoming:cog"],None,"degrees_to_radians"),
+    ("SAIS_IOR","kinematic.heading.true",["incoming:true_heading"],None,"degrees_to_radians"),("SAIS_IOR","ais.navStatus",["incoming:nav_status","ais_state:nav_status"],None,None),
+    ("SAIS_IOR","voyage.destination",["incoming:destination","ais_state:destination"],None,None),("SAIS_IOR","voyage.eta",["incoming:eta","ais_state:eta"],None,None),
+    ("MSIS","id.mmsi",["incoming:mmsi"],None,None),("MSIS","id.imo",["incoming:imo","ais_state:imo"],None,None),
+    ("MSIS","id.callsign",["incoming:callsign","ais_state:callsign"],None,None),("MSIS","vessel.name",["incoming:ship_name","ais_state:vessel_name"],"UNKNOWN",None),
+    ("MSIS","ais.typeAndCargo",["incoming:type_and_cargo","ais_state:vessel_type"],None,None),("MSIS","vessel.length",["incoming:length","ais_state:length"],None,None),
+    ("MSIS","vessel.beam",["incoming:width","ais_state:width"],None,None),("MSIS","vessel.draft",["incoming:draught","ais_state:draught"],None,None),
+    ("MSIS","kinematic.pos.lla.lat",["incoming:latitude"],None,"degrees_to_radians"),("MSIS","kinematic.pos.lla.lon",["incoming:longitude"],None,"degrees_to_radians"),
+    ("MSIS","kinematic.speed",["incoming:sog"],None,"knots_to_ms"),("MSIS","kinematic.course.true",["incoming:cog"],None,"degrees_to_radians"),
+    ("MSIS","kinematic.heading.true",["incoming:true_heading"],None,"degrees_to_radians"),("MSIS","ais.navStatus",["incoming:navigation_status","incoming:navigatetion_status","ais_state:nav_status"],None,None),
+    ("MSIS","voyage.destination",["incoming:destination","ais_state:destination"],None,None),("MSIS","voyage.eta",["incoming:eta","ais_state:eta"],None,None),
+    ("LRIT","id.mmsi",["incoming:mmsi"],None,None),("LRIT","id.imo",["incoming:imo","ais_state:imo"],None,None),
+    ("LRIT","id.callsign",["incoming:callsign","ais_state:callsign"],None,None),("LRIT","vessel.name",["incoming:vessel_name","ais_state:vessel_name"],"UNKNOWN",None),
+    ("LRIT","kinematic.pos.lla.lat",["incoming:latitude"],None,"degrees_to_radians"),("LRIT","kinematic.pos.lla.lon",["incoming:longitude"],None,"degrees_to_radians"),
+    ("LRIT","kinematic.speed",["incoming:sog"],None,"knots_to_ms"),("LRIT","kinematic.course.true",["incoming:cog"],None,"degrees_to_radians"),
+    ("LRIT","kinematic.heading.true",["incoming:heading"],None,"degrees_to_radians"),("LRIT","ais.navStatus",["incoming:nav_status","ais_state:nav_status"],None,None),
+    ("LRIT","vessel.length",["incoming:length","ais_state:length"],None,None),("LRIT","vessel.beam",["incoming:width","ais_state:width"],None,None),
+    ("LRIT","vessel.draft",["incoming:draught","ais_state:draught"],None,None),("LRIT","ais.typeAndCargo",["incoming:vessel_type","ais_state:vessel_type"],None,None),
+    ("LRIT","voyage.destination",["incoming:destination","ais_state:destination"],None,None),("LRIT","voyage.eta",["incoming:eta","ais_state:eta"],None,None),
+]
+
 def setting(key, default=None):
     with db() as conn:
         row=conn.execute("SELECT value FROM system_config WHERE key=%s",(key,)).fetchone()
@@ -231,7 +258,14 @@ def ensure_schema():
             conn.execute(
                 """INSERT INTO field_mapping(source_name,input_field,target_field,transformation,required,fallback_order)
                    VALUES(%s,%s,%s,%s,%s,%s)
-                   ON CONFLICT(source_name,input_field,target_field) DO NOTHING""", row)
+                   ON CONFLICT(source_name,input_field,target_field) DO NOTHING""", row)        for source_name,logical_field,candidates,default_value,transformation in PARSER_MAPPING_DEFAULTS:
+            conn.execute(
+                """INSERT INTO parser_mapping(source_name,logical_field,candidates,default_value,transformation)
+                   VALUES(%s,%s,%s::jsonb,%s,%s)
+                   ON CONFLICT(source_name,logical_field) DO NOTHING""",
+                (source_name,logical_field,json.dumps(candidates),default_value,transformation)
+            )
+
     log.info("PostgreSQL schema/default configuration ready.")
 
 def normalized_xml_record(root: ET.Element) -> dict[str, str]:

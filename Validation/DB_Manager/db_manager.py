@@ -229,10 +229,21 @@ def record_identity(data: dict, prefix: str = "") -> tuple[str|None,int|None,int
     return vessel_id, mmsi, imo, callsign, name
 
 def upsert_reference(table: str, history_table: str, identity_cols: dict, data: dict, source_file: str, source_hash: str):
+    """UPSERT current state and append the replaced version to history.
+
+    Missing records in a later WRS/NSC refresh are deliberately not deleted.
+    """
     cols = list(identity_cols)
     vals = [identity_cols[c] for c in cols]
     data_json = json.dumps(data, ensure_ascii=False)
     where_cols = " AND ".join(f"{c} IS NOT DISTINCT FROM %s" for c in cols)
+    if table == "reference_wrs_current":
+        history_cols = ["dataset_name", "natural_key"]
+    elif table == "reference_pans_current":
+        history_cols = ["document_type", "natural_key"]
+    else:
+        history_cols = ["natural_key", "source_region"]
+    history_vals = [identity_cols.get(c) for c in history_cols]
     with db() as conn:
         old = conn.execute(
             f"SELECT * FROM {table} WHERE {where_cols} LIMIT 1", tuple(vals)
@@ -242,11 +253,12 @@ def upsert_reference(table: str, history_table: str, identity_cols: dict, data: 
             if old_data != data:
                 conn.execute(
                     f"""INSERT INTO {history_table}
-                        ({", ".join(cols)},source_file,source_hash,data)
-                        VALUES ({",".join(["%s"]*len(cols))},%s,%s,%s::jsonb)""",
-                    (*vals, old.get("source_file"), old.get("source_hash"),
+                        ({", ".join(history_cols)},source_file,source_hash,data)
+                        VALUES ({",".join(["%s"]*len(history_cols))},%s,%s,%s::jsonb)""",
+                    (*history_vals, old.get("source_file"), old.get("source_hash"),
                      json.dumps(old_data, ensure_ascii=False)),
                 )
+            # Current identity columns are retained as part of the latest version.
             sets = ", ".join([f"{c}=%s" for c in cols] + ["source_file=%s","source_hash=%s","data=%s::jsonb","updated_at=now()"])
             conn.execute(
                 f"UPDATE {table} SET {sets} WHERE {where_cols}",

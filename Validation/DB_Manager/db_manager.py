@@ -496,7 +496,16 @@ pre{white-space:pre-wrap;max-height:400px;overflow:auto}.muted{color:#9ca3af}
 <button onclick="post('/api/import/nsc')">Update NSC</button>
 <button onclick="post('/api/import/pans/once')">Process PANS now</button><pre id="action"></pre></div>
 <div class="card"><h2>Vessel Search</h2><input id="q" placeholder="MMSI / IMO / callsign / name"><button onclick="search()">Search</button><pre id="results"></pre></div>
-<div class="card"><h2>Mappings</h2><button onclick="mappings()">View mappings</button><pre id="maps"></pre></div>
+<div class="card"><h2>Mappings / Config</h2>
+<button onclick="mappings()">View mappings</button>
+<form onsubmit="saveMapping(event)">
+<input id="ms" placeholder="source_name"><input id="mi" placeholder="input_field"><input id="mt" placeholder="target_field">
+<input id="mx" placeholder="transformation"><button>Save mapping</button></form><pre id="maps"></pre>
+</div>
+<div class="card"><h2>UN/LOCODE / Destination</h2>
+<form onsubmit="saveLoc(event)"><input id="lk" placeholder="LOCODE"><input id="ln" placeholder="Location name"><input id="lc" placeholder="Country"><button>Save UN/LOCODE</button></form>
+<form onsubmit="saveDest(event)"><input id="dk" placeholder="Destination key"><input id="dn" placeholder="Destination name"><input id="dl" placeholder="LOCODE"><button>Save destination</button></form>
+<pre id="cfg"></pre></div>
 </div>
 <script>
 async function get(u){let r=await fetch(u);return await r.json()}
@@ -504,6 +513,9 @@ async function post(u){let r=await fetch(u,{method:'POST'});document.getElementB
 async function load(){document.getElementById('status').textContent=JSON.stringify(await get('/api/status'),null,2)}
 async function search(){document.getElementById('results').textContent=JSON.stringify(await get('/api/search?q='+encodeURIComponent(document.getElementById('q').value)),null,2)}
 async function mappings(){document.getElementById('maps').textContent=JSON.stringify(await get('/api/mappings'),null,2)}
+async function saveMapping(e){e.preventDefault();let r=await fetch('/api/mapping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({source_name:ms.value,input_field:mi.value,target_field:mt.value,transformation:mx.value})});document.getElementById('maps').textContent=JSON.stringify(await r.json(),null,2);mappings()}
+async function saveLoc(e){e.preventDefault();let r=await fetch('/api/unlocode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({locode:lk.value,location_name:ln.value,country_code:lc.value})});document.getElementById('cfg').textContent=JSON.stringify(await r.json(),null,2)}
+async function saveDest(e){e.preventDefault();let r=await fetch('/api/destination',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({destination_key:dk.value,destination_name:dn.value,locode:dl.value})});document.getElementById('cfg').textContent=JSON.stringify(await r.json(),null,2)}
 load()
 </script></body></html>"""
 

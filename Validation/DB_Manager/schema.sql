@@ -22,6 +22,19 @@ CREATE TABLE IF NOT EXISTS field_mapping (
     UNIQUE(source_name,input_field,target_field)
 );
 
+CREATE TABLE IF NOT EXISTS parser_mapping (
+    mapping_id BIGSERIAL PRIMARY KEY,
+    source_name TEXT NOT NULL,
+    logical_field TEXT NOT NULL,
+    candidates JSONB NOT NULL DEFAULT '[]'::jsonb,
+    default_value TEXT,
+    transformation TEXT,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(source_name,logical_field)
+);
+CREATE INDEX IF NOT EXISTS idx_parser_mapping_source ON parser_mapping(source_name);
+
 CREATE TABLE IF NOT EXISTS unlocode (
     locode TEXT PRIMARY KEY,
     country_code TEXT,
